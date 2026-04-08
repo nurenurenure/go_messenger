@@ -1,0 +1,16 @@
+version: '3.8'
+services:
+  messenger_db:
+    image: postgres:15-alpine
+    container_name: messenger_db
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: password123
+      POSTGRES_DB: messenger_logs
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+
+volumes:
+  pg_data:
