@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+package messenger;
+// Путь, куда будет сгенерирован код Go
+option go_package = "./internal/protocol";
+
+// Основной контейнер для сообщений
+message GenericMessage {
+    uint32 type = 1;      // Тип сообщения (1 - Auth, 2 - Chat, 3 - Ack)
+    bytes payload = 2;    // Сами данные в бинарном виде
+}
+
+// Структура чат-сообщения
+message ChatMessage {
+    string sender_id = 1;
+    string recipient_id = 2;
+    string text = 3;
+    int64 timestamp = 4;
+}
+
+// Структура авторизации
+message AuthRequest {
+    string username = 1;
+    string password = 2;
+}
