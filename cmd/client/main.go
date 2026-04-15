@@ -1,10 +1,12 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"log"
 	"net"
-	"time"
+	"os"
+	"strings"
 
 	"messenger/internal/protocol"
 
@@ -19,30 +21,70 @@ func main() {
 	}
 	defer conn.Close()
 
-	fmt.Println("Подключено к серверу!")
+	// 2. Спрашиваем никнейм
+	reader := bufio.NewReader(os.Stdin)
+	fmt.Print("Введите ваш ник: ")
+	username, _ := reader.ReadString('\n')
+	username = strings.TrimSpace(username)
 
-	// 2. Формируем данные для авторизации (Protobuf)
-	authReq := &protocol.AuthRequest{
-		Username: "Anna_Developer",
-		Password: "super_secret_password",
+	// 3. Отправляем пакет авторизации (Тип 1)
+	authReq := &protocol.AuthRequest{Username: username}
+	payload, _ := proto.Marshal(authReq)
+	if err := protocol.WritePacket(conn, 1, payload); err != nil {
+		log.Fatalf("Ошибка отправки авторизации: %v", err)
 	}
 
-	// 3. Маршалим (сериализуем) структуру в байты
-	payload, err := proto.Marshal(authReq)
-	if err != nil {
-		log.Fatalf("Ошибка сериализации: %v", err)
+	fmt.Printf("Вы вошли как [%s]. Напишите что-нибудь...\n", username)
+
+	// 4. ЗАПУСКАЕМ ФОНОВОЕ ЧТЕНИЕ
+	// Эта горутина будет постоянно ждать сообщений от сервера
+	go listenServer(conn)
+
+	// 5. ОСНОВНОЙ ЦИКЛ ОТПРАВКИ
+	// Программа будет "стоять" здесь и ждать твоего ввода
+	scanner := bufio.NewScanner(os.Stdin)
+	for {
+		fmt.Print("> ") // Приглашение к вводу
+		if !scanner.Scan() {
+			break
+		}
+
+		text := scanner.Text()
+		if text == "" {
+			continue
+		}
+
+		// Формируем пакет сообщения (Тип 2)
+		chatMsg := &protocol.ChatMessage{
+			SenderId: username,
+			Text:     text,
+		}
+
+		msgPayload, _ := proto.Marshal(chatMsg)
+		if err := protocol.WritePacket(conn, 2, msgPayload); err != nil {
+			fmt.Println("Связь с сервером потеряна")
+			break
+		}
 	}
+}
 
-	// 4. Отправляем пакет через наш кастомный протокол
-	// Тип 1 соответствует handleAuth на сервере
-	err = protocol.WritePacket(conn, 1, payload)
-	if err != nil {
-		log.Fatalf("Ошибка отправки пакета: %v", err)
+// listenServer — функция, которая работает в фоне (в горутине)
+func listenServer(conn net.Conn) {
+	for {
+		msgType, payload, err := protocol.ReadPacket(conn)
+		if err != nil {
+			fmt.Println("\nСоединение с сервером разорвано.")
+			os.Exit(0) // Завершаем всё приложение, если сервер упал
+		}
+
+		// Если пришло обычное сообщение (Тип 2)
+		if msgType == 2 {
+			msg := &protocol.ChatMessage{}
+			if err := proto.Unmarshal(payload, msg); err == nil {
+				// Выводим сообщение от другого пользователя
+				// \r и пробелы нужны, чтобы "затереть" текущую строку ввода "> "
+				fmt.Printf("\r[%s]: %s\n> ", msg.SenderId, msg.Text)
+			}
+		}
 	}
-
-	fmt.Println("Запрос на авторизацию отправлен!")
-
-	// 5. Небольшая пауза, чтобы сервер успел обработать,
-	// прежде чем мы закроем соединение и выйдем
-	time.Sleep(1 * time.Second)
 }
