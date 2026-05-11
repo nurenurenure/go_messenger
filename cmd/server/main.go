@@ -1,10 +1,12 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"messenger/protocol"
 	"net"
+	"os"
 	"sync"
 
 	_ "modernc.org/sqlite"
@@ -33,6 +35,43 @@ func main() {
 
 	srv.storage.LogEvent("SERVER_START", "Сервер запущен на :8080")
 	fmt.Println("Сервер запущен...")
+	//горутина для обработки команд админа
+	go func() {
+		scanner := bufio.NewScanner(os.Stdin)
+		fmt.Println("Доступные команды сервера: /logs, /msglogs, /users, /exit")
+		for scanner.Scan() {
+			command := scanner.Text()
+			switch command {
+			case "/logs":
+				logs, _ := srv.storage.GetSystemLogs(20)
+				for _, l := range logs {
+					fmt.Println(l)
+				}
+			case "/users":
+				srv.mu.Lock()
+				fmt.Println("В сети:", len(srv.clients))
+				for name := range srv.clients {
+					fmt.Println("-", name)
+				}
+				srv.mu.Unlock()
+			case "/msglogs":
+				msgLogs, _ := srv.storage.GetMessageLogs(50)
+				if len(msgLogs) == 0 {
+					fmt.Println("История сообщений пуста")
+				} else {
+					for _, l := range msgLogs {
+						fmt.Println(l)
+					}
+				}
+			//нужно доработать потом!
+			case "/exit":
+				os.Exit(0)
+			default:
+				fmt.Println("Неизвестная команда")
+
+			}
+		}
+	}()
 
 	defer srv.storage.LogEvent("SERVER_STOP", "Сервер остановлен пользователем.")
 	//слушать порт

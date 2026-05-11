@@ -18,6 +18,7 @@ func InitStorage(path string) *Storage {
 	if err != nil {
 		log.Fatal(err)
 	}
+
 	//создать таблицу для сообщений
 	query := `
 	CREATE TABLE IF NOT EXISTS messages(
@@ -34,7 +35,7 @@ func InitStorage(path string) *Storage {
 	queryLogs := `
 	CREATE TABLE IF NOT EXISTS system_logs(
 	id INTEGER PRIMARY KEY AUTOINCREMENT,
-	event_typr TEXT, -- "SERVER_START", "USER_LOGIN", "USER_LOGOUT", "SERVER_STOP"
+	event_type TEXT,
 	details TEXT,
 	timestamp INTEGER
 	);`
@@ -52,12 +53,55 @@ func InitStorage(path string) *Storage {
 }
 
 // записать системный лог
-func (s *Storage) LogEvent(evenType, details string) {
-	query := `INSERT INTO system_logs (event_type, details, time_stamp) VALUES (?, ?, ?)`
-	_, err := s.db.Exec(query, evenType, details, time.Now().Unix())
+func (s *Storage) LogEvent(eventType, details string) {
+	query := `INSERT INTO system_logs (event_type, details, timestamp) VALUES (?, ?, ?)`
+	_, err := s.db.Exec(query, eventType, details, time.Now().Unix())
 	if err != nil {
 		fmt.Printf("Ошибка записи лога: %v\n", err)
 	}
+}
+
+// вернуть ограниченное количество логов для админа
+func (s *Storage) GetSystemLogs(limit int) ([]string, error) {
+	query := `SELECT event_type, details, timestamp FROM system_logs ORDER BY timestamp DESC LIMIT ?`
+	rows, err := s.db.Query(query, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var logs []string
+	for rows.Next() {
+		var eventType, details string
+		var timestamp int64
+		rows.Scan(&eventType, &details, &timestamp)
+
+		//форматированная строка лога
+		t := time.Unix(timestamp, 0).Format("15:04:05")
+		logEntry := fmt.Sprintf("[%s] %s: %s", t, eventType, details)
+		logs = append(logs, logEntry)
+	}
+	return logs, nil
+}
+
+// вернуть ограниченное количество последних сообщений для админа
+func (s *Storage) GetMessageLogs(limit int) ([]string, error) {
+	query := `SELECT sender, recipient, content, timestamp FROM messages ORDER BY timestamp DESC LIMIT ?`
+	rows, err := s.db.Query(query, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var logs []string
+	for rows.Next() {
+		var sender, recipient, content string
+		var timestamp int64
+		rows.Scan(&sender, &recipient, &content, &timestamp)
+		t := time.Unix(timestamp, 0).Format("15:04:05")
+		logEntry := fmt.Sprintf("[%s] %s -> %s: %s", t, sender, recipient, content)
+		logs = append(logs, logEntry)
+	}
+	return logs, err
 }
 
 // сохранить сообщение в базу

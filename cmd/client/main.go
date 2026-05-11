@@ -34,7 +34,7 @@ func main() {
 		for {
 			msgType, payload, err := protocol.ReadPacket(conn)
 			if err != nil {
-				fmt.Println("\nСвязь с сервером потеряна")
+				fmt.Println("\nСвязь с сервером потеряна:")
 				os.Exit(1)
 			}
 
