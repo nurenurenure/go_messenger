@@ -14,6 +14,10 @@ const (
 	TypeSystem uint8 = 0x04
 	TypeError  uint8 = 0x05
 )
+const (
+	ActionSendMessage = "send"
+	ActionTyping      = "typing"
+)
 
 type Message struct {
 	ID        string `json:"id"`
