@@ -30,9 +30,13 @@ func main() {
 	srv := NewServer()
 	//инициализировать базу
 	srv.storage = InitStorage("./messenger.db")
+
+	srv.storage.LogEvent("SERVER_START", "Сервер запущен на :8080")
+	fmt.Println("Сервер запущен...")
+
+	defer srv.storage.LogEvent("SERVER_STOP", "Сервер остановлен пользователем.")
 	//слушать порт
 	listener, _ := net.Listen("tcp", ":8080")
-	fmt.Println("Сервер запущен на :8080")
 
 	for {
 		conn, _ := listener.Accept()
@@ -52,11 +56,16 @@ func (s *Server) handleClient(conn net.Conn) {
 	var authData protocol.Message
 	json.Unmarshal(payload, &authData)
 	username := authData.Sender
+	s.storage.LogEvent("USER_LOGIN", "Пользователь "+username+" вошел в сеть")
 	//блокирование мьютекса на запись в мапу
 	s.mu.Lock()
 	s.clients[username] = conn
 	s.mu.Unlock()
 	fmt.Printf("Пользователь %s вошел в чат\n", username)
+	defer func() {
+		s.storage.LogEvent("USER_LOGOUT", "Пользователь "+username+" вышел из сети")
+		conn.Close()
+	}()
 	//получить историю сообщений
 	history, err := s.storage.GetHistory(username)
 
@@ -101,7 +110,5 @@ func (s *Server) routeMessage(payload []byte) {
 		//отправка сообщения получателю
 		protocol.WritePacket(recipientConn, protocol.TypeChat, msg)
 
-	} else {
-		fmt.Printf("Пользователь %s не в сети\n", msg.Recipient)
 	}
 }

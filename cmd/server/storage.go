@@ -2,8 +2,10 @@ package main
 
 import (
 	"database/sql"
+	"fmt"
 	"log"
 	"messenger/protocol"
+	"time"
 )
 
 type Storage struct {
@@ -27,12 +29,35 @@ func InitStorage(path string) *Storage {
 	action TEXT
 	);`
 
+	//таблица для системных логов
+
+	queryLogs := `
+	CREATE TABLE IF NOT EXISTS system_logs(
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	event_typr TEXT, -- "SERVER_START", "USER_LOGIN", "USER_LOGOUT", "SERVER_STOP"
+	details TEXT,
+	timestamp INTEGER
+	);`
+
 	_, err = db.Exec(query)
+	if err != nil {
+		log.Fatal(err)
+	}
+	_, err = db.Exec(queryLogs)
 	if err != nil {
 		log.Fatal(err)
 	}
 	return &Storage{db: db}
 
+}
+
+// записать системный лог
+func (s *Storage) LogEvent(evenType, details string) {
+	query := `INSERT INTO system_logs (event_type, details, time_stamp) VALUES (?, ?, ?)`
+	_, err := s.db.Exec(query, evenType, details, time.Now().Unix())
+	if err != nil {
+		fmt.Printf("Ошибка записи лога: %v\n", err)
+	}
 }
 
 // сохранить сообщение в базу
