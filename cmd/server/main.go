@@ -6,13 +6,16 @@ import (
 	"messenger/protocol"
 	"net"
 	"sync"
+
+	_ "modernc.org/sqlite"
 )
 
 type Server struct {
 	//ключ - никнейм, значение - соединение
 	clients map[string]net.Conn
 	//горутины будут одновременно записывать данные в мапу
-	mu sync.Mutex
+	mu      sync.Mutex
+	storage *Storage
 }
 
 // конструктор сервера
@@ -25,6 +28,8 @@ func NewServer() *Server {
 func main() {
 	//инициализировать сервер
 	srv := NewServer()
+	//инициализировать базу
+	srv.storage = InitStorage("./messenger.db")
 	//слушать порт
 	listener, _ := net.Listen("tcp", ":8080")
 	fmt.Println("Сервер запущен на :8080")
@@ -52,7 +57,16 @@ func (s *Server) handleClient(conn net.Conn) {
 	s.clients[username] = conn
 	s.mu.Unlock()
 	fmt.Printf("Пользователь %s вошел в чат\n", username)
+	//получить историю сообщений
+	history, err := s.storage.GetHistory(username)
 
+	if err != nil {
+		fmt.Println("Ошибка получения истории:", err)
+	} else {
+		for _, msg := range history {
+			protocol.WritePacket(conn, protocol.TypeChat, msg)
+		}
+	}
 	for {
 		msgType, payload, err := protocol.ReadPacket(conn)
 		//удаление записи при обрыве соединения
@@ -72,6 +86,13 @@ func (s *Server) handleClient(conn net.Conn) {
 func (s *Server) routeMessage(payload []byte) {
 	var msg protocol.Message
 	json.Unmarshal(payload, &msg)
+
+	//сохранить в БД
+	err := s.storage.SaveMessage(msg)
+	if err != nil {
+		fmt.Println("Ошибка сохранения в БД:", err)
+	}
+
 	//чтение из мапы
 	s.mu.Lock()
 	recipientConn, ok := s.clients[msg.Recipient]
