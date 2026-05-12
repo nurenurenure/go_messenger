@@ -6,6 +6,8 @@ import (
 	"log"
 	"messenger/protocol"
 	"time"
+
+	"golang.org/x/crypto/bcrypt"
 )
 
 type Storage struct {
@@ -40,11 +42,21 @@ func InitStorage(path string) *Storage {
 	timestamp INTEGER
 	);`
 
+	queryUsers := `
+	CREATE TABLE IF NOT EXISTS users(
+	username TEXT PRIMARY KEY,
+	password_hash TEXT NOT NULL
+	);`
+
 	_, err = db.Exec(query)
 	if err != nil {
 		log.Fatal(err)
 	}
 	_, err = db.Exec(queryLogs)
+	if err != nil {
+		log.Fatal(err)
+	}
+	_, err = db.Exec(queryUsers)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -131,4 +143,29 @@ func (s *Storage) GetHistory(username string) ([]protocol.Message, error) {
 		history = append(history, m)
 	}
 	return history, nil
+}
+
+// Регистрация
+func (s *Storage) RegisterUser(username, password string) error {
+	hash, _ := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	_, err := s.db.Exec("INSERT INTO users(username, password_hash) VALUES (?, ?)", username, string(hash))
+	return err
+}
+
+func (s *Storage) CheckPassword(username, password string) bool {
+	var hash string
+	err := s.db.QueryRow("SELECT password_hash FROM users WHERE username = ?", username).Scan(&hash)
+	if err != nil {
+		return false
+	}
+	err = bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
+	return err == nil
+}
+
+func (s *Storage) UserExists(username string) bool {
+	var name string
+
+	err := s.db.QueryRow("SELECT username FROM users WHERE username = ?", username).Scan(&name)
+
+	return err == nil
 }

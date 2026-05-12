@@ -83,7 +83,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				Sender:    m.username,
 				Recipient: strings.TrimSpace(parts[0]),
 				Content:   strings.TrimSpace(parts[1]),
-				Action:    protocol.ActionSendMessage,
+				Action:    protocol.TypeChat,
 				TimeStamp: time.Now().Unix(),
 			}
 			protocol.WritePacket(m.conn, 2, pMsg)
@@ -137,7 +137,21 @@ func main() {
 	fmt.Print("Введите Ваш никнейм: ")
 	var username string
 	fmt.Scanln(&username)
-	protocol.WritePacket(conn, 1, protocol.Message{Sender: username})
+	fmt.Print("Введите Ваш пароль: ")
+	var password string
+	fmt.Scanln(&password)
+	authMsg := protocol.Message{
+		Sender:  username,
+		Content: password,
+		Action:  protocol.TypeAuth,
+	}
+	protocol.WritePacket(conn, protocol.TypeAuth, authMsg)
+
+	msgType, _, err := protocol.ReadPacket(conn)
+	if err != nil || msgType != protocol.TypeAuth {
+		fmt.Println("Ошибка авторизации.")
+		return
+	}
 
 	p := tea.NewProgram(InitialModel(conn, username), tea.WithAltScreen())
 

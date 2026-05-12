@@ -94,6 +94,14 @@ func (s *Server) handleClient(conn net.Conn) {
 
 	var authData protocol.Message
 	json.Unmarshal(payload, &authData)
+	if s.storage.UserExists(authData.Sender) {
+		if !s.storage.CheckPassword(authData.Sender, authData.Content) {
+			return
+		}
+	} else {
+		s.storage.RegisterUser(authData.Sender, authData.Content)
+	}
+	protocol.WritePacket(conn, protocol.TypeAuth, protocol.Message{Content: "Ok"})
 	username := authData.Sender
 	s.storage.LogEvent("USER_LOGIN", "Пользователь "+username+" вошел в сеть")
 	//блокирование мьютекса на запись в мапу

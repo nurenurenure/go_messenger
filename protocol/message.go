@@ -14,10 +14,6 @@ const (
 	TypeSystem uint8 = 0x04
 	TypeError  uint8 = 0x05
 )
-const (
-	ActionSendMessage = "send"
-	ActionTyping      = "typing"
-)
 
 type Message struct {
 	ID        string `json:"id"`
@@ -25,7 +21,7 @@ type Message struct {
 	Recipient string `json:"recipient"`
 	Content   string `json:"content"`
 	TimeStamp int64  `json:"timestamp"`
-	Action    string `json:"action"`
+	Action    uint8  `json:"action"`
 }
 
 func WritePacket(conn net.Conn, msgType uint8, data interface{}) error {
