@@ -125,8 +125,11 @@ func (s *Storage) SaveMessage(msg protocol.Message) error {
 
 // достать историю сообщений для конкретного пользователя
 func (s *Storage) GetHistory(username string) ([]protocol.Message, error) {
-	query := `SELECT sender, recipient, content, timestamp, action FROM messages WHERE recipient = ? OR sender = ? ORDER BY timestamp ASC`
-	rows, err := s.db.Query(query, username, username)
+	query := `SELECT sender, recipient, content, timestamp, action
+	 FROM messages WHERE recipient = ? OR sender = ?
+	 OR (recipient LIKE '#%' AND recipient IN (SELECT DISTINCT recipient FROM messages WHERE sender = ?)) 
+	 ORDER BY timestamp ASC`
+	rows, err := s.db.Query(query, username, username, username)
 	if err != nil {
 		return nil, err
 	}

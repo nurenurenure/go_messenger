@@ -183,16 +183,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case serverMsg:
-		targetChat := msg.Sender
+		var targetChat string
 		//если личка,ключ - имя отправителя, если группа - название группы
 		if strings.HasPrefix(msg.Recipient, "#") {
 			targetChat = msg.Recipient
-		}
-		newMsg := chatMessage{
-			Sender:    msg.Sender,
-			Content:   msg.Content,
-			Timestamp: time.Unix(msg.TimeStamp, 0),
-			IsMe:      false,
+		} else {
+			if msg.Sender == m.username {
+				targetChat = msg.Recipient
+			} else {
+				targetChat = msg.Sender
+			}
 		}
 
 		if _, exists := m.chats[targetChat]; !exists {
@@ -202,7 +202,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.activeChat = targetChat
 			}
 		}
-		m.chats[targetChat] = append(m.chats[targetChat], newMsg)
+		m.chats[targetChat] = append(m.chats[targetChat], chatMessage{
+			Sender:    msg.Sender,
+			Content:   msg.Content,
+			Timestamp: time.Unix(msg.TimeStamp, 0),
+			IsMe:      (msg.Sender == m.username),
+		})
 		if m.activeChat == targetChat {
 			m.refreshViewPoint()
 		}
