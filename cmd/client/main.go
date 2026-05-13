@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -434,7 +435,11 @@ func waitForMessages(conn net.Conn, p *tea.Program) {
 }
 
 func main() {
-	conn, err := net.Dial("tcp", "localhost:8080")
+
+	conf := &tls.Config{
+		InsecureSkipVerify: true,
+	}
+	conn, err := tls.Dial("tcp", "localhost:8080", conf)
 	if err != nil {
 		fmt.Println("Ошибка подключения к серверу:", err)
 		return

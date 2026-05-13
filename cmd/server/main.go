@@ -2,8 +2,11 @@ package main
 
 import (
 	"bufio"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"log"
+	"messenger/certgen"
 	"messenger/protocol"
 	"net"
 	"os"
@@ -36,6 +39,27 @@ func main() {
 	srv := NewServer()
 	//инициализировать базу
 	srv.storage = InitStorage("./messenger.db")
+
+	//проверка и генерация tls сертификатов
+	certFile := "server.crt"
+	keyFile := "server.key"
+	if _, err := os.Stat(certFile); os.IsNotExist(err) {
+		fmt.Println("TLS сертификаты не найдены. Генерация...")
+		err := certgen.GenerateCerts()
+		if err != nil {
+			log.Fatal("Критическая ошибка при генерации сертификатов.", err)
+		}
+		fmt.Println("Сертификаты успешно созданы")
+	}
+
+	//загрузка сертификатов для конфигурации TLS
+	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
+	if err != nil {
+		log.Fatal("Ошибка загрузки TLS ключей", err)
+	}
+	tlsConfig := &tls.Config{
+		Certificates: []tls.Certificate{cert},
+	}
 
 	srv.storage.LogEvent("SERVER_START", "Сервер запущен на :8080")
 	fmt.Println("Сервер запущен...")
@@ -79,10 +103,15 @@ func main() {
 
 	defer srv.storage.LogEvent("SERVER_STOP", "Сервер остановлен пользователем.")
 	//слушать порт
-	listener, _ := net.Listen("tcp", ":8080")
-
+	listener, _ := tls.Listen("tcp", ":8080", tlsConfig)
+	if err != nil {
+		log.Fatal("Ошибка запуска TLS слущателя", err)
+	}
 	for {
 		conn, _ := listener.Accept()
+		if err != nil {
+			fmt.Println("Ошибка подключения:", err)
+		}
 		// горутина для каждого клиента
 		go srv.handleClient(conn)
 	}
