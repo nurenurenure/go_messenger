@@ -247,7 +247,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				} else {
 					m.chats[m.activeChat] = append(m.chats[m.activeChat], chatMessage{
 						Sender:    m.username,
-						Content:   content,
+						Content:   finalContent,
 						Timestamp: time.Now(),
 						IsMe:      true,
 					})
