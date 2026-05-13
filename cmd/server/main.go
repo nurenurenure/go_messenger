@@ -155,6 +155,23 @@ func (s *Server) handleClient(conn net.Conn) {
 		if msgType == protocol.TypeChat {
 			s.routeMessage(payload)
 		}
+		if msgType == protocol.TypeSystem {
+			var sysMsg protocol.Message
+			json.Unmarshal(payload, &sysMsg)
+
+			if sysMsg.Content == "LEAVE" {
+				//удалить из оперативной памяти (текущая сессия)
+				s.mu.Lock()
+				if _, exists := s.groups[sysMsg.Recipient]; exists {
+					delete(s.groups[sysMsg.Recipient], username)
+				}
+				s.mu.Unlock()
+				//удалить из БД
+				s.storage.RemoveUserFromGroupHistory(username, sysMsg.Recipient)
+
+				fmt.Printf("Пользователь %s покинул чат %s\n", username, sysMsg.Recipient)
+			}
+		}
 	}
 }
 

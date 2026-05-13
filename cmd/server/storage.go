@@ -172,3 +172,9 @@ func (s *Storage) UserExists(username string) bool {
 
 	return err == nil
 }
+
+func (s *Storage) RemoveUserFromGroupHistory(username, groupName string) error {
+	query := `DELETE FROM messages WHERE sender = ? AND recipient = ?`
+	_, err := s.db.Exec(query, username, groupName)
+	return err
+}

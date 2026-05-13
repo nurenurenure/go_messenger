@@ -150,6 +150,41 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 
+			//обработка команды /leave
+			if strings.HasPrefix(content, "/leave ") {
+				target := strings.TrimSpace(strings.TrimPrefix(content, "/leave "))
+
+				delete(m.chats, target)
+				newContacts := []string{}
+				for _, c := range m.contacts {
+					if c != target {
+						newContacts = append(newContacts, c)
+					}
+				}
+				m.contacts = newContacts
+
+				//если пользователь вышел из активного чата, сбросить его
+				if m.activeChat == target {
+					m.activeChat = ""
+					if len(m.contacts) > 0 {
+						m.activeChat = m.contacts[0]
+					} else {
+						m.activeChat = ""
+					}
+				}
+				m.textarea.Reset()
+				m.refreshViewPoint()
+				//системное сообщение серверу
+				leaveMsg := protocol.Message{
+					Sender:    m.username,
+					Recipient: target,
+					Action:    protocol.TypeSystem,
+					Content:   "LEAVE",
+				}
+				protocol.WritePacket(m.conn, protocol.TypeSystem, leaveMsg)
+				return m, nil
+			}
+
 			// Отправка обычного сообщения
 			if m.activeChat != "" {
 				pMsg := protocol.Message{
