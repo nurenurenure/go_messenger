@@ -33,6 +33,7 @@ type model struct {
 	conn           net.Conn
 	replyTo        *chatMessage
 	selectedMsgIdx int
+	forwardMsg     *chatMessage
 }
 
 // Специальный тип для обработки сообщений от сервера в Bubble Tea
@@ -98,6 +99,18 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.refreshViewPoint()
 			}
 			return m, nil
+		case tea.KeyRight:
+			history := m.chats[m.activeChat]
+			if len(history) > 0 && m.replyTo != nil {
+				//выбор сообщения для пересылки
+				m.forwardMsg = m.replyTo
+
+				//сброс режима выбора, но forwardMsg остается в памяти
+				m.replyTo = nil
+				m.refreshViewPoint()
+			}
+			return m, nil
+
 		case tea.KeyEscape:
 			if m.replyTo != nil {
 				m.replyTo = nil
@@ -122,7 +135,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case tea.KeyEnter:
 			//TrimSpace убирает \n, который textarea успевает вставить
 			content := strings.TrimSpace(m.textarea.Value())
-			if content == "" {
+			if content == "" && m.forwardMsg == nil {
 				m.textarea.Reset()
 				return m, nil
 			}
@@ -220,13 +233,22 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.activeChat != "" {
 				finalContent := content
 
-				if m.replyTo != nil {
+				if m.forwardMsg != nil {
+					//формат пересылки
+					fwdText := fmt.Sprintf("  >[FWD от %s]: %s", m.forwardMsg.Sender, m.forwardMsg.Content)
+					if content != "" {
+						finalContent = content + fwdText
+					} else {
+						finalContent = "Пересланное сообщение" + fwdText
+					}
+				} else if m.replyTo != nil {
 
 					preview := m.replyTo.Content
 					if len(preview) > 30 {
 						preview = preview[:27] + "..."
 					}
 					finalContent = fmt.Sprintf("%s  >[%s]: %s", content, m.replyTo.Sender, preview)
+
 				}
 				pMsg := protocol.Message{
 					Sender:    m.username,
@@ -379,17 +401,18 @@ func (m model) View() string {
 	}
 
 	mainLayout := lipgloss.JoinHorizontal(lipgloss.Top, sidebarStyle.Render(sb.String()), centerView)
-	replyBar := ""
-	if m.replyTo != nil {
-		style := lipgloss.NewStyle().Foreground(lipgloss.Color("241")).Italic(true)
-		replyBar = style.Render(fmt.Sprintf("REPLY TO %s: %s", m.replyTo.Sender, m.replyTo.Content)) + "\n"
+
+	statusLine := ""
+	if m.forwardMsg != nil {
+		fwdStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("13")).Bold(true)
+		statusLine = fwdStyle.Render(fmt.Sprintf("ПЕРЕСЫЛКА (от %s): %s", m.forwardMsg.Sender, m.forwardMsg.Content)) + "\n"
 	}
 
 	return fmt.Sprintf(
 		"Вы вошли как: %s\n\n%s\n\n%s%s\n%s",
 		m.username,
 		mainLayout,
-		replyBar,
+		statusLine,
 		m.textarea.View(),
 		"TAB - сменить чат | /add имя - начать чат | Ctrl+C - выход",
 	)
