@@ -226,7 +226,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					if len(preview) > 30 {
 						preview = preview[:27] + "..."
 					}
-					finalContent = fmt.Sprintf("> [%s]: %s\n%s", m.replyTo.Sender, preview, content)
+					finalContent = fmt.Sprintf("%s  >[%s]: %s", content, m.replyTo.Sender, preview)
 				}
 				pMsg := protocol.Message{
 					Sender:    m.username,
@@ -322,15 +322,28 @@ func (m *model) refreshViewPoint() {
 			nameColor = "2" // Зеленый для себя
 		}
 		nameStr := lipgloss.NewStyle().Foreground(lipgloss.Color(nameColor)).Bold(true).Render(msg.Sender)
-		content := fmt.Sprintf("%s %s: %s", timeStr, nameStr, msg.Content)
+		displayContent := msg.Content
+
+		//ищем разделители читаты
+		if strings.Contains(msg.Content, "  >[") {
+			parts := strings.SplitN(msg.Content, "  >[", 2)
+			if len(parts) == 2 {
+				mainText := parts[0]
+				quoteText := "  >[" + parts[1]
+
+				quoteStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("242")).Italic(true)
+				displayContent = mainText + quoteStyle.Render(quoteText)
+			}
+		}
+		line := fmt.Sprintf("%s %s: %s", timeStr, nameStr, displayContent)
 		if m.replyTo != nil && i == m.selectedMsgIdx {
 			style := lipgloss.NewStyle().
 				Background(lipgloss.Color("236")).
 				Foreground(lipgloss.Color("229")).
 				Bold(true)
-			lines = append(lines, style.Render("> "+content))
+			lines = append(lines, style.Render("> "+line))
 		} else {
-			lines = append(lines, " "+content)
+			lines = append(lines, " "+line)
 		}
 	}
 	m.viewport.SetContent(strings.Join(lines, "\n"))
