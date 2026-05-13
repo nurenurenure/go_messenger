@@ -111,6 +111,45 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil // Выходим, чтобы не отправлять команду как текст
 			}
 
+			//обработка команды /join
+			if strings.HasPrefix(content, "/join ") {
+				groupname := strings.TrimSpace(strings.TrimPrefix(content, "/join"))
+
+				//если пользователь не написал решетку, написать
+				if !strings.HasPrefix(groupname, "#") {
+					groupname = "#" + groupname
+				}
+
+				if groupname != "#" {
+					if _, exists := m.chats[groupname]; !exists {
+						m.chats[groupname] = []chatMessage{}
+						m.contacts = append(m.contacts, groupname)
+					}
+					m.activeChat = groupname
+					m.refreshViewPoint()
+
+					joinMsg := protocol.Message{
+						Sender:    m.username,
+						Recipient: groupname,
+						Content:   "Присоединился к группе",
+						Action:    protocol.TypeChat,
+						TimeStamp: time.Now().Unix(),
+					}
+					protocol.WritePacket(m.conn, protocol.TypeChat, joinMsg)
+
+					//локальное сообщение пользователю
+					m.chats[groupname] = append(m.chats[groupname], chatMessage{
+						Sender:    m.username,
+						Content:   "Вы присоединились к группе",
+						Timestamp: time.Now(),
+						IsMe:      true,
+					})
+					m.refreshViewPoint()
+				}
+				m.textarea.Reset()
+				return m, nil
+			}
+
 			// Отправка обычного сообщения
 			if m.activeChat != "" {
 				pMsg := protocol.Message{

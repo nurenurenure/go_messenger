@@ -7,6 +7,7 @@ import (
 	"messenger/protocol"
 	"net"
 	"os"
+	"strings"
 	"sync"
 
 	_ "modernc.org/sqlite"
@@ -15,6 +16,8 @@ import (
 type Server struct {
 	//ключ - никнейм, значение - соединение
 	clients map[string]net.Conn
+
+	groups map[string]map[string]net.Conn
 	//горутины будут одновременно записывать данные в мапу
 	mu      sync.Mutex
 	storage *Storage
@@ -24,6 +27,7 @@ type Server struct {
 func NewServer() *Server {
 	return &Server{
 		clients: make(map[string]net.Conn),
+		groups:  make(map[string]map[string]net.Conn),
 	}
 }
 
@@ -111,7 +115,22 @@ func (s *Server) handleClient(conn net.Conn) {
 	fmt.Printf("Пользователь %s вошел в чат\n", username)
 	defer func() {
 		s.storage.LogEvent("USER_LOGOUT", "Пользователь "+username+" вышел из сети")
+
+		s.mu.Lock()
+		//удалить из общего списка
+		delete(s.clients, username)
+
+		//удалить из групп
+		for groupName := range s.groups {
+			delete(s.groups[groupName], username)
+
+			if len(s.groups[groupName]) == 0 {
+				delete(s.groups, groupName)
+			}
+		}
+		s.mu.Unlock()
 		conn.Close()
+		fmt.Printf("Пользователь %s покинул чат\n", username)
 	}()
 	//получить историю сообщений
 	history, err := s.storage.GetHistory(username)
@@ -151,8 +170,33 @@ func (s *Server) routeMessage(payload []byte) {
 
 	//чтение из мапы
 	s.mu.Lock()
+	defer s.mu.Unlock()
+	//проверка является ли получатель группой
+	if strings.HasPrefix(msg.Recipient, "#") {
+		groupName := msg.Recipient
+
+		if _, exists := s.groups[groupName]; !exists {
+			s.groups[groupName] = make(map[string]net.Conn)
+		}
+
+		//если отправителя еще нет в группе - добавить
+		if _, inGroup := s.groups[groupName][msg.Sender]; !inGroup {
+			if senderConn, ok := s.clients[msg.Sender]; ok {
+				s.groups[groupName][msg.Sender] = senderConn
+			}
+		}
+
+		//рассылка участникам
+		for name, conn := range s.groups[groupName] {
+			if name != msg.Sender {
+				protocol.WritePacket(conn, protocol.TypeChat, msg)
+			}
+		}
+		return
+
+	}
+
 	recipientConn, ok := s.clients[msg.Recipient]
-	s.mu.Unlock()
 	if ok {
 		//отправка сообщения получателю
 		protocol.WritePacket(recipientConn, protocol.TypeChat, msg)
