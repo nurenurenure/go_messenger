@@ -24,13 +24,15 @@ type chatMessage struct {
 }
 
 type model struct {
-	viewport   viewport.Model
-	textarea   textarea.Model
-	chats      map[string][]chatMessage
-	contacts   []string
-	activeChat string
-	username   string
-	conn       net.Conn
+	viewport       viewport.Model
+	textarea       textarea.Model
+	chats          map[string][]chatMessage
+	contacts       []string
+	activeChat     string
+	username       string
+	conn           net.Conn
+	replyTo        *chatMessage
+	selectedMsgIdx int
 }
 
 // Специальный тип для обработки сообщений от сервера в Bubble Tea
@@ -70,8 +72,37 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.Type {
-		case tea.KeyCtrlC, tea.KeyEsc:
+		case tea.KeyCtrlC:
 			return m, tea.Quit
+		case tea.KeyUp:
+			history := m.chats[m.activeChat]
+			if len(history) > 0 {
+				if m.replyTo == nil {
+					m.selectedMsgIdx = len(history) - 1
+				} else if m.selectedMsgIdx > 0 {
+					m.selectedMsgIdx--
+				}
+				m.replyTo = &history[m.selectedMsgIdx]
+				m.refreshViewPoint()
+			}
+			return m, nil
+		case tea.KeyDown:
+			history := m.chats[m.activeChat]
+			if m.replyTo != nil {
+				if m.selectedMsgIdx < len(history)-1 {
+					m.selectedMsgIdx++
+					m.replyTo = &history[m.selectedMsgIdx]
+				} else {
+					m.replyTo = nil
+				}
+				m.refreshViewPoint()
+			}
+			return m, nil
+		case tea.KeyEscape:
+			if m.replyTo != nil {
+				m.replyTo = nil
+				return m, nil
+			}
 
 		case tea.KeyTab:
 			if len(m.contacts) > 0 {
@@ -187,10 +218,20 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			// Отправка обычного сообщения
 			if m.activeChat != "" {
+				finalContent := content
+
+				if m.replyTo != nil {
+
+					preview := m.replyTo.Content
+					if len(preview) > 30 {
+						preview = preview[:27] + "..."
+					}
+					finalContent = fmt.Sprintf("> [%s]: %s\n%s", m.replyTo.Sender, preview, content)
+				}
 				pMsg := protocol.Message{
 					Sender:    m.username,
 					Recipient: m.activeChat,
-					Content:   content,
+					Content:   finalContent,
 					Action:    protocol.TypeChat,
 					TimeStamp: time.Now().Unix(),
 				}
@@ -211,6 +252,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						IsMe:      true,
 					})
 				}
+
+				m.replyTo = nil
 				m.refreshViewPoint()
 			}
 			m.textarea.Reset()
@@ -270,7 +313,7 @@ func (m *model) refreshViewPoint() {
 		return
 	}
 
-	for _, msg := range history {
+	for i, msg := range history {
 		t := msg.Timestamp.Format("15:04")
 		timeStr := lipgloss.NewStyle().Foreground(lipgloss.Color("240")).Render(t)
 
@@ -279,10 +322,23 @@ func (m *model) refreshViewPoint() {
 			nameColor = "2" // Зеленый для себя
 		}
 		nameStr := lipgloss.NewStyle().Foreground(lipgloss.Color(nameColor)).Bold(true).Render(msg.Sender)
-		lines = append(lines, fmt.Sprintf("%s %s: %s", timeStr, nameStr, msg.Content))
+		content := fmt.Sprintf("%s %s: %s", timeStr, nameStr, msg.Content)
+		if m.replyTo != nil && i == m.selectedMsgIdx {
+			style := lipgloss.NewStyle().
+				Background(lipgloss.Color("236")).
+				Foreground(lipgloss.Color("229")).
+				Bold(true)
+			lines = append(lines, style.Render("> "+content))
+		} else {
+			lines = append(lines, " "+content)
+		}
 	}
 	m.viewport.SetContent(strings.Join(lines, "\n"))
-	m.viewport.GotoBottom()
+	//
+	if m.replyTo == nil {
+		m.viewport.GotoBottom()
+
+	}
 }
 
 func (m model) View() string {
@@ -310,11 +366,17 @@ func (m model) View() string {
 	}
 
 	mainLayout := lipgloss.JoinHorizontal(lipgloss.Top, sidebarStyle.Render(sb.String()), centerView)
+	replyBar := ""
+	if m.replyTo != nil {
+		style := lipgloss.NewStyle().Foreground(lipgloss.Color("241")).Italic(true)
+		replyBar = style.Render(fmt.Sprintf("REPLY TO %s: %s", m.replyTo.Sender, m.replyTo.Content)) + "\n"
+	}
 
 	return fmt.Sprintf(
-		"Вы вошли как: %s\n\n%s\n\n%s\n%s",
+		"Вы вошли как: %s\n\n%s\n\n%s%s\n%s",
 		m.username,
 		mainLayout,
+		replyBar,
 		m.textarea.View(),
 		"TAB - сменить чат | /add имя - начать чат | Ctrl+C - выход",
 	)
