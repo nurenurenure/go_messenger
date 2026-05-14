@@ -1,0 +1,4 @@
+server.crt
+server.key
+messenger.db
+user_data/

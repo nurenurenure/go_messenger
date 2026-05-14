@@ -14,6 +14,7 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/dgraph-io/badger/v4"
 )
 
 // Структура сообщения специально для интерфейса клиента
@@ -35,6 +36,7 @@ type model struct {
 	replyTo        *chatMessage
 	selectedMsgIdx int
 	forwardMsg     *chatMessage
+	db             *badger.DB //локальная база данных
 }
 
 // Специальный тип для обработки сообщений от сервера в Bubble Tea
@@ -146,7 +148,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				name := strings.TrimSpace(strings.TrimPrefix(content, "/add "))
 				if name != "" && name != m.username {
 					if _, exists := m.chats[name]; !exists {
-						m.chats[name] = []chatMessage{}
+						m.chats[name] = loadHistory(m.db, name)
 						m.contacts = append(m.contacts, name)
 					}
 					m.activeChat = name
@@ -268,15 +270,18 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						IsMe:      false,
 					})
 				} else {
-					m.chats[m.activeChat] = append(m.chats[m.activeChat], chatMessage{
+					msgToSave := chatMessage{
 						Sender:    m.username,
 						Content:   finalContent,
 						Timestamp: time.Now(),
 						IsMe:      true,
-					})
+					}
+					m.chats[m.activeChat] = append(m.chats[m.activeChat], msgToSave)
+					saveToDB(m.db, m.activeChat, msgToSave)
 				}
 
 				m.replyTo = nil
+
 				m.refreshViewPoint()
 			}
 			m.textarea.Reset()
@@ -303,12 +308,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.activeChat = targetChat
 			}
 		}
-		m.chats[targetChat] = append(m.chats[targetChat], chatMessage{
+
+		newMsg := chatMessage{
 			Sender:    msg.Sender,
 			Content:   msg.Content,
 			Timestamp: time.Unix(msg.TimeStamp, 0),
 			IsMe:      (msg.Sender == m.username),
-		})
+		}
+		m.chats[targetChat] = append(m.chats[targetChat], newMsg)
+
+		saveToDB(m.db, targetChat, newMsg)
 		if m.activeChat == targetChat {
 			m.refreshViewPoint()
 		}
@@ -465,9 +474,46 @@ func main() {
 		fmt.Println("Ошибка авторизации. Проверьте логин/пароль.")
 		return
 	}
+	//блок работы с локальной БД
+	db, err := initDB(username)
+	if err != nil {
+		log.Fatal("Не удалось открыть базу данных", err)
+	}
+	defer db.Close()
+	m := InitialModel(conn, username)
+	m.db = db
+
+	//проход по всем ключам. (потом переделать!!!!)
+	m.db.View(func(txn *badger.Txn) error {
+		it := txn.NewIterator(badger.DefaultIteratorOptions)
+		defer it.Close()
+		for it.Rewind(); it.Valid(); it.Next() {
+			key := string(it.Item().Key())
+			parts := strings.Split(key, ":")
+			name := parts[0]
+
+			found := false
+			for _, c := range m.contacts {
+				if c == name {
+					found = true
+					break
+				}
+			}
+			if !found {
+				m.contacts = append(m.contacts, name)
+				m.chats[name] = loadHistory(m.db, name)
+			}
+		}
+		return nil
+	})
+	//костыль. потом переделать
+	if len(m.contacts) > 0 && m.activeChat == "" {
+		m.activeChat = m.contacts[0]
+		m.refreshViewPoint()
+	}
 
 	// Запуск интерфейса
-	p := tea.NewProgram(InitialModel(conn, username), tea.WithAltScreen())
+	p := tea.NewProgram(m, tea.WithAltScreen())
 
 	go waitForMessages(conn, p)
 
