@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -9,18 +10,20 @@ import (
 	"github.com/dgraph-io/badger/v4"
 )
 
-func initDB(username string) (*badger.DB, error) {
+func initDB(username, rawPassword string) (*badger.DB, error) {
 	path := filepath.Join("user_data", "db_"+username)
 
 	if err := os.MkdirAll("user_data", 0755); err != nil {
 		return nil, err
 	}
 
+	keyHash := sha256.Sum256([]byte(rawPassword))
+
 	opts := badger.DefaultOptions(path)
 
-	//ключ шифрования (пока что заглушка)
-	opts.EncryptionKey = []byte("a-very-secret-key-32-chars=long!")
-	opts.IndexCacheSize = 10 << 20 //10MB
+	//ключ шифрования
+	opts.EncryptionKey = keyHash[:]
+	opts.IndexCacheSize = 100 << 20
 
 	return badger.Open(opts)
 }

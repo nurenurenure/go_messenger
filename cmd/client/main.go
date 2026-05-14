@@ -475,7 +475,7 @@ func main() {
 		return
 	}
 	//блок работы с локальной БД
-	db, err := initDB(username)
+	db, err := initDB(username, password)
 	if err != nil {
 		log.Fatal("Не удалось открыть базу данных", err)
 	}
