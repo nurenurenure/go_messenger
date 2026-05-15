@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/dgraph-io/badger/v4"
 )
@@ -59,4 +60,28 @@ func loadHistory(db *badger.DB, chatName string) []chatMessage {
 		return nil
 	})
 	return history
+}
+func loadAllContacts(db *badger.DB) ([]string, map[string][]chatMessage) {
+	contacts := []string{}
+	chats := make(map[string][]chatMessage)
+	seen := make(map[string]bool)
+
+	db.View(func(txn *badger.Txn) error {
+		it := txn.NewIterator(badger.DefaultIteratorOptions)
+		defer it.Close()
+
+		for it.Rewind(); it.Valid(); it.Next() {
+			key := string(it.Item().Key())
+			parts := strings.Split(key, ":")
+			if len(parts) > 0 && !seen[parts[0]] {
+				name := parts[0]
+				seen[name] = true
+				contacts = append(contacts, name)
+				chats[name] = loadHistory(db, name)
+			}
+		}
+		return nil
+	})
+
+	return contacts, chats
 }
