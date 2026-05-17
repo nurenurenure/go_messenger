@@ -32,6 +32,7 @@ func (m *model) sendMessage(content string) {
 	if m.activeChat == "" {
 		return
 	}
+	content = ReplaceEmojis(content)
 
 	finalContent := m.formatMessageContent(content)
 

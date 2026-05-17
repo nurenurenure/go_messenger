@@ -37,7 +37,7 @@ type model struct {
 
 type serverMsg protocol.Message
 
-func InitialModel(conn net.Conn, username string, db *badger.DB) model {
+func InitialModel(conn net.Conn, username string, db *badger.DB) *model {
 	ta := textarea.New()
 	ta.Placeholder = "Введите сообщение или /add [ник]..."
 	ta.Focus()
@@ -65,14 +65,14 @@ func InitialModel(conn net.Conn, username string, db *badger.DB) model {
 		m.refreshViewport()
 	}
 
-	return m
+	return &m
 }
 
 func (m model) Init() tea.Cmd {
 	return textarea.Blink
 }
 
-func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		// Только специальные клавиши обрабатываем сами
@@ -110,7 +110,7 @@ func isSpecialKey(msg tea.KeyMsg) bool {
 	return false
 }
 
-func (m model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m *model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.Type {
 	case tea.KeyCtrlC:
 		return m, tea.Quit
@@ -136,6 +136,19 @@ func (m model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyTab:
+		// Проверяем, вводит ли пользователь код эмодзи
+		currentInput := m.textarea.Value()
+		lastWord := getLastWord(currentInput)
+
+		if strings.HasPrefix(lastWord, ":") {
+			// Пытаемся автодополнить эмодзи
+			completed := m.autocompleteEmoji(currentInput)
+			if completed != currentInput {
+				m.textarea.SetValue(completed)
+				return m, nil
+			}
+		}
+		// Если не эмодзи или не получилось дополнить - переключаем чат
 		m.switchToNextContact()
 		return m, nil
 
@@ -160,19 +173,81 @@ func (m model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m model) View() string {
+func (m *model) View() string {
 	mainLayout := lipgloss.JoinHorizontal(
 		lipgloss.Top,
 		m.renderSidebar(),
 		m.viewport.View(),
 	)
+	emojiHints := m.renderEmojiHints()
 
 	return fmt.Sprintf(
-		"Вы вошли как: %s\n\n%s\n\n%s%s\n%s",
+		"Вы вошли как: %s\n\n%s\n\n%s%s\n%s\n%s",
 		m.username,
 		mainLayout,
 		m.renderStatusLine(),
 		m.textarea.View(),
+		emojiHints,
 		"TAB - сменить чат | /add имя - начать чат | Ctrl+C - выход",
 	)
+}
+
+// autocompleteEmoji пытается дополнить код эмодзи
+func (m *model) autocompleteEmoji(input string) string {
+	lastWord := getLastWord(input)
+	if !strings.HasPrefix(lastWord, ":") {
+		return input
+	}
+
+	suggestions := FindEmojiSuggestions(lastWord)
+	if len(suggestions) == 1 {
+		// Заменяем последнее слово на полный код эмодзи
+		words := strings.Fields(input)
+		words[len(words)-1] = suggestions[0]
+		return strings.Join(words, " ") + " "
+	}
+
+	// Если несколько вариантов, показываем первый
+	if len(suggestions) > 0 {
+		words := strings.Fields(input)
+		words[len(words)-1] = suggestions[0]
+		return strings.Join(words, " ")
+	}
+
+	return input
+}
+
+func (m *model) renderEmojiHints() string {
+	currentInput := m.textarea.Value()
+	lastWord := getLastWord(currentInput)
+
+	if !strings.HasPrefix(lastWord, ":") || len(lastWord) < 2 {
+		return ""
+	}
+
+	suggestions := FindEmojiSuggestions(lastWord)
+	if len(suggestions) == 0 {
+		return ""
+	}
+
+	// Форматируем каждый вариант: эмодзи + код
+	var items []string
+	for _, code := range suggestions {
+		emoji := EmojiMap[code]
+		items = append(items, fmt.Sprintf("%s %s", emoji, code))
+	}
+
+	return lipgloss.NewStyle().
+		Foreground(lipgloss.Color("241")).
+		Italic(true).
+		Render(strings.Join(items, "  |  "))
+}
+
+// getLastWord возвращает последнее слово из текста
+func getLastWord(text string) string {
+	words := strings.Fields(text)
+	if len(words) == 0 {
+		return ""
+	}
+	return words[len(words)-1]
 }
