@@ -161,3 +161,37 @@ func (s *Storage) RemoveUserFromGroupHistory(username, groupName string) error {
 	_, err := s.db.Exec(query, username, groupName)
 	return err
 }
+
+// LogFileEvent логирует событие передачи файла
+func (s *Storage) LogFileEvent(eventType, sender, recipient, fileName string, fileSize int64, fileID string) {
+	query := `INSERT INTO system_logs (event_type, details, timestamp) VALUES (?, ?, ?)`
+	details := fmt.Sprintf("File: %s | From: %s -> To: %s | Size: %d bytes | ID: %s",
+		fileName, sender, recipient, fileSize, fileID)
+	_, err := s.db.Exec(query, eventType, details, time.Now().Unix())
+	if err != nil {
+		fmt.Printf("Ошибка записи лога файла: %v\n", err)
+	}
+}
+
+// GetFileLogs возвращает логи файловых операций
+func (s *Storage) GetFileLogs(limit int) ([]string, error) {
+	query := `SELECT event_type, details, timestamp FROM system_logs 
+	          WHERE event_type LIKE 'FILE_%' 
+	          ORDER BY timestamp DESC LIMIT ?`
+	rows, err := s.db.Query(query, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var logs []string
+	for rows.Next() {
+		var eventType, details string
+		var timestamp int64
+		rows.Scan(&eventType, &details, &timestamp)
+		t := time.Unix(timestamp, 0).Format("15:04:05")
+		logEntry := fmt.Sprintf("[%s] %s: %s", t, eventType, details)
+		logs = append(logs, logEntry)
+	}
+	return logs, nil
+}

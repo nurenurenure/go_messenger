@@ -9,7 +9,7 @@ import (
 // handleAdminCommands обрабатывает команды администратора
 func handleAdminCommands(srv *Server) {
 	scanner := bufio.NewScanner(os.Stdin)
-	fmt.Println("Доступные команды сервера: /logs, /msglogs, /users, /exit")
+	fmt.Println("Доступные команды сервера: /logs, /filelogs, /msglogs, /users, /exit")
 
 	for scanner.Scan() {
 		command := scanner.Text()
@@ -20,6 +20,8 @@ func handleAdminCommands(srv *Server) {
 // executeAdminCommand выполняет конкретную админскую команду
 func (s *Server) executeAdminCommand(command string) {
 	switch command {
+	case "/filelogs":
+		s.showFileLogs()
 	case "/logs":
 		s.showSystemLogs()
 	case "/users":
@@ -68,6 +70,23 @@ func (s *Server) showMessageLogs() {
 	}
 
 	for _, l := range msgLogs {
+		fmt.Println(l)
+	}
+}
+func (s *Server) showFileLogs() {
+	logs, err := s.storage.GetFileLogs(50)
+	if err != nil {
+		fmt.Println("Ошибка получения логов файлов:", err)
+		return
+	}
+
+	if len(logs) == 0 {
+		fmt.Println("История файловых операций пуста")
+		return
+	}
+
+	fmt.Println("=== Логи файловых операций ===")
+	for _, l := range logs {
 		fmt.Println(l)
 	}
 }

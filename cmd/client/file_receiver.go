@@ -6,6 +6,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"messenger/protocol"
@@ -94,7 +95,7 @@ func (fr *FileReceiver) handleFileHeader(payload []byte) {
 		TotalChunks: totalChunks,
 	}
 
-	fmt.Printf("Получаем файл: %s (%d чанков)\n", header.FileName, totalChunks)
+	fmt.Printf("Получение файла: %s (%d чанков)\n", header.FileName, totalChunks)
 }
 
 func (fr *FileReceiver) handleFileChunk(payload []byte) {
@@ -113,15 +114,20 @@ func (fr *FileReceiver) handleFileChunk(payload []byte) {
 	receiving.Chunks[chunk.ChunkIndex] = data
 	receiving.ReceivedChunks++
 
+	// Всегда выводим прогресс
 	progress := float64(receiving.ReceivedChunks) / float64(receiving.TotalChunks) * 100
-	fmt.Printf("\rПрогресс: %.1f%% (%d/%d)", progress, receiving.ReceivedChunks, receiving.TotalChunks)
+	fmt.Print("\r" + strings.Repeat(" ", 80) + "\r")
+	fmt.Printf("Прогресс: %.1f%% (%d/%d)",
+		progress, receiving.ReceivedChunks, receiving.TotalChunks)
 
+	// Проверяем завершение
 	if receiving.ReceivedChunks >= receiving.TotalChunks {
-		fmt.Println()
+		// Очищаем строку прогресса
+		fmt.Print("\r" + strings.Repeat(" ", 80) + "\r")
+		fmt.Println() // Перевод строки
 		fr.assembleFile(chunk.FileID)
 	}
 }
-
 func (fr *FileReceiver) assembleFile(fileID string) {
 	receiving, ok := fr.activeFiles[fileID]
 	if !ok {
@@ -159,9 +165,9 @@ func (fr *FileReceiver) assembleFile(fileID string) {
 		elapsed := time.Since(receiving.StartTime)
 		speed := float64(len(fileData)) / elapsed.Seconds() / 1024
 
-		fmt.Printf("Файл получен: %s (%d байт, %.1f KB/s, контрольная сумма верна)\n",
+		// Чистый вывод без мусора
+		fmt.Printf("Файл получен: %s (%d байт, %.1f KB/s)\n",
 			receiving.Header.FileName, len(fileData), speed)
-
 		if fr.onComplete != nil {
 			fr.onComplete(receiving.Header.FileName, filePath)
 		}
@@ -169,8 +175,6 @@ func (fr *FileReceiver) assembleFile(fileID string) {
 		complete.Status = "error"
 		protocol.WritePacket(fr.conn, protocol.TypeFileComplete, complete)
 		fmt.Printf("Ошибка: контрольная сумма не совпадает!\n")
-		fmt.Printf("Ожидалось: %s\n", receiving.Header.Checksum)
-		fmt.Printf("Получено: %s\n", actualChecksum)
 	}
 
 	delete(fr.activeFiles, fileID)
