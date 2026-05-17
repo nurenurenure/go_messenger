@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"messenger/protocol"
+	"strings"
 	"time"
 )
 
@@ -30,6 +31,11 @@ func (m *model) formatMessageContent(content string) string {
 // sendMessage отправляет сообщение в активный чат
 func (m *model) sendMessage(content string) {
 	if m.activeChat == "" {
+		return
+	}
+	if strings.HasPrefix(content, "file://") {
+		filePath := strings.TrimPrefix(content, "file://")
+		m.handleFileCommand(fmt.Sprintf("/file %s %s", m.activeChat, filePath))
 		return
 	}
 	content = ReplaceEmojis(content)

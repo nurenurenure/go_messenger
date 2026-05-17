@@ -1,41 +1,40 @@
 package main
 
 import (
-	"messenger/protocol"
 	"net"
 	"sync"
+
+	"messenger/protocol"
 )
 
 type Server struct {
-	clients map[string]net.Conn            // ключ - никнейм, значение - соединение
-	groups  map[string]map[string]net.Conn // группы пользователей
-	mu      sync.Mutex
-	storage *Storage
+	clients       map[string]net.Conn
+	groups        map[string]map[string]net.Conn
+	mu            sync.Mutex
+	storage       *Storage
+	fileTransfers *FileTransferManager // ДОБАВИТЬ
 }
 
 func NewServer() *Server {
 	return &Server{
-		clients: make(map[string]net.Conn),
-		groups:  make(map[string]map[string]net.Conn),
+		clients:       make(map[string]net.Conn),
+		groups:        make(map[string]map[string]net.Conn),
+		fileTransfers: NewFileTransferManager(), // ДОБАВИТЬ
 	}
 }
 
-// addClient добавляет клиента в общий список
 func (s *Server) addClient(username string, conn net.Conn) {
 	s.mu.Lock()
 	s.clients[username] = conn
 	s.mu.Unlock()
 }
 
-// removeClient удаляет клиента из всех списков
 func (s *Server) removeClient(username string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// Удалить из общего списка
 	delete(s.clients, username)
 
-	// Удалить из всех групп
 	for groupName := range s.groups {
 		delete(s.groups[groupName], username)
 		if len(s.groups[groupName]) == 0 {
@@ -44,7 +43,13 @@ func (s *Server) removeClient(username string) {
 	}
 }
 
-// addToGroup добавляет пользователя в группу
+func (s *Server) getClient(username string) (net.Conn, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	conn, ok := s.clients[username]
+	return conn, ok
+}
+
 func (s *Server) addToGroup(groupName, username string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -60,7 +65,6 @@ func (s *Server) addToGroup(groupName, username string) {
 	}
 }
 
-// broadcastToGroup рассылает сообщение всем участникам группы
 func (s *Server) broadcastToGroup(groupName, sender string, msg protocol.Message) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -77,7 +81,6 @@ func (s *Server) broadcastToGroup(groupName, sender string, msg protocol.Message
 	}
 }
 
-// sendToUser отправляет сообщение конкретному пользователю
 func (s *Server) sendToUser(username string, msg protocol.Message) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -91,7 +94,6 @@ func (s *Server) sendToUser(username string, msg protocol.Message) bool {
 	return true
 }
 
-// getOnlineUsers возвращает список пользователей онлайн
 func (s *Server) getOnlineUsers() []string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -103,7 +105,6 @@ func (s *Server) getOnlineUsers() []string {
 	return users
 }
 
-// getOnlineCount возвращает количество пользователей онлайн
 func (s *Server) getOnlineCount() int {
 	s.mu.Lock()
 	defer s.mu.Unlock()

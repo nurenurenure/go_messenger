@@ -12,27 +12,21 @@ import (
 func (s *Server) handleClient(conn net.Conn) {
 	defer conn.Close()
 
-	// Аутентификация
 	username, err := s.authenticate(conn)
 	if err != nil {
 		return
 	}
 
-	// Регистрация клиента
 	s.addClient(username, conn)
 	defer s.cleanupClient(username, conn)
 
 	s.storage.LogEvent("USER_LOGIN", "Пользователь "+username+" вошел в сеть")
 	fmt.Printf("Пользователь %s вошел в чат\n", username)
 
-	// Отправка истории сообщений
 	s.sendHistory(conn, username)
-
-	// Основной цикл обработки сообщений
 	s.messageLoop(conn, username)
 }
 
-// authenticate выполняет аутентификацию пользователя
 func (s *Server) authenticate(conn net.Conn) (string, error) {
 	msgType, payload, err := protocol.ReadPacket(conn)
 	if err != nil || msgType != protocol.TypeAuth {
@@ -42,7 +36,6 @@ func (s *Server) authenticate(conn net.Conn) (string, error) {
 	var authData protocol.Message
 	json.Unmarshal(payload, &authData)
 
-	// Проверка пользователя
 	if s.storage.UserExists(authData.Sender) {
 		if !s.storage.CheckPassword(authData.Sender, authData.Content) {
 			return "", fmt.Errorf("неверный пароль")
@@ -55,7 +48,6 @@ func (s *Server) authenticate(conn net.Conn) (string, error) {
 	return authData.Sender, nil
 }
 
-// sendHistory отправляет историю сообщений пользователю
 func (s *Server) sendHistory(conn net.Conn, username string) {
 	history, err := s.storage.GetHistory(username)
 	if err != nil {
@@ -68,12 +60,11 @@ func (s *Server) sendHistory(conn net.Conn, username string) {
 	}
 }
 
-// messageLoop обрабатывает входящие сообщения
 func (s *Server) messageLoop(conn net.Conn, username string) {
 	for {
 		msgType, payload, err := protocol.ReadPacket(conn)
 		if err != nil {
-			return // соединение разорвано
+			return
 		}
 
 		switch msgType {
@@ -81,32 +72,33 @@ func (s *Server) messageLoop(conn net.Conn, username string) {
 			s.handleChatMessage(payload)
 		case protocol.TypeSystem:
 			s.handleSystemMessage(payload, username)
+		case protocol.TypeFileRequest,
+			protocol.TypeFileAccept,
+			protocol.TypeFileReject,
+			protocol.TypeFileHeader,
+			protocol.TypeFileChunk,
+			protocol.TypeFileComplete:
+			s.handleFileTransfer(msgType, payload, username)
 		}
 	}
 }
 
-// handleChatMessage обрабатывает чат-сообщение
 func (s *Server) handleChatMessage(payload []byte) {
 	var msg protocol.Message
 	json.Unmarshal(payload, &msg)
 
-	// Сохраняем в БД
 	if err := s.storage.SaveMessage(msg); err != nil {
 		fmt.Println("Ошибка сохранения в БД:", err)
 	}
 
-	// Маршрутизация сообщения
 	if strings.HasPrefix(msg.Recipient, "#") {
-		// Групповое сообщение
 		s.addToGroup(msg.Recipient, msg.Sender)
 		s.broadcastToGroup(msg.Recipient, msg.Sender, msg)
 	} else {
-		// Личное сообщение
 		s.sendToUser(msg.Recipient, msg)
 	}
 }
 
-// handleSystemMessage обрабатывает системное сообщение
 func (s *Server) handleSystemMessage(payload []byte, username string) {
 	var sysMsg protocol.Message
 	json.Unmarshal(payload, &sysMsg)
@@ -118,7 +110,6 @@ func (s *Server) handleSystemMessage(payload []byte, username string) {
 	}
 }
 
-// cleanupClient очищает данные клиента при отключении
 func (s *Server) cleanupClient(username string, conn net.Conn) {
 	s.storage.LogEvent("USER_LOGOUT", "Пользователь "+username+" вышел из сети")
 	s.removeClient(username)

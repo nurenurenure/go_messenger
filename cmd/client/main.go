@@ -46,16 +46,32 @@ func main() {
 	}
 	defer db.Close()
 
-	// Запуск приложения
-	p := tea.NewProgram(InitialModel(conn, username, db), tea.WithAltScreen())
+	// Создаем модель
+	m := InitialModel(conn, username, db)
 
-	// Слушаем сообщения от сервера в отдельной горутине
+	// Создаем программу
+	p := tea.NewProgram(m, tea.WithAltScreen())
+
+	// Запускаем прослушивание сообщений
 	go func() {
 		for {
 			msgType, payload, err := protocol.ReadPacket(conn)
 			if err != nil {
 				break
 			}
+
+			// Обработка файловых сообщений
+			switch msgType {
+			case protocol.TypeFileRequest,
+				protocol.TypeFileHeader,
+				protocol.TypeFileChunk,
+				protocol.TypeFileComplete,
+				protocol.TypeFileError:
+				m.fileReceiver.HandleFileMessage(msgType, payload)
+				continue
+			}
+
+			// Обычные сообщения
 			if msgType == protocol.TypeChat {
 				var incoming protocol.Message
 				if json.Unmarshal(payload, &incoming) == nil {
@@ -65,6 +81,7 @@ func main() {
 		}
 	}()
 
+	// Запускаем приложение
 	if _, err := p.Run(); err != nil {
 		log.Fatal(err)
 	}

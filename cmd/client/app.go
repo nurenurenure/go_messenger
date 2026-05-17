@@ -33,13 +33,16 @@ type model struct {
 	selectedMsgIdx int
 	forwardMsg     *chatMessage
 	db             *badger.DB
+	fileReceiver   *FileReceiver
+	fileSender     *FileSender
+	fileProgress   float64
 }
 
 type serverMsg protocol.Message
 
 func InitialModel(conn net.Conn, username string, db *badger.DB) *model {
 	ta := textarea.New()
-	ta.Placeholder = "Введите сообщение или /add [ник]..."
+	ta.Placeholder = "Введите сообщение, /add [ник] или /file [ник] [путь]..."
 	ta.Focus()
 	ta.CharLimit = 280
 	ta.SetHeight(3)
@@ -47,48 +50,67 @@ func InitialModel(conn net.Conn, username string, db *badger.DB) *model {
 	vp := viewport.New(55, 15)
 	vp.SetContent("--- Выберите чат (TAB) или добавьте контакт через /add ---")
 
-	m := model{
-		textarea:   ta,
-		viewport:   vp,
-		conn:       conn,
-		username:   username,
-		chats:      make(map[string][]chatMessage),
-		contacts:   []string{},
-		activeChat: "",
-		db:         db,
+	m := &model{
+		textarea:     ta,
+		viewport:     vp,
+		conn:         conn,
+		username:     username,
+		chats:        make(map[string][]chatMessage),
+		contacts:     []string{},
+		activeChat:   "",
+		db:           db,
+		fileReceiver: NewFileReceiver(conn, username), // ДОБАВИТЬ
+		fileSender:   NewFileSender(conn, username),   // ДОБАВИТЬ
 	}
 
-	// Загружаем контакты из БД
 	m.contacts, m.chats = loadAllContacts(db)
 	if len(m.contacts) > 0 && m.activeChat == "" {
 		m.activeChat = m.contacts[0]
 		m.refreshViewport()
 	}
 
-	return &m
+	// Настройка callback для получения файлов
+	m.fileReceiver.SetOnComplete(func(fileName string, filePath string) {
+		// Добавляем сообщение в чат о полученном файле
+		// Нужно определить, от кого файл (можно из FileID)
+	})
+
+	return m
 }
 
-func (m model) Init() tea.Cmd {
+func (m *model) Init() tea.Cmd {
 	return textarea.Blink
 }
 
 func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		// Только специальные клавиши обрабатываем сами
 		if isSpecialKey(msg) {
 			return m.handleKeyPress(msg)
 		}
-		// Обычный ввод идёт в textarea ниже
 
 	case serverMsg:
-		targetChat := getTargetChat(protocol.Message(msg), m.username)
-		m.addMessageToChat(targetChat, chatMessage{
-			Sender:    msg.Sender,
-			Content:   msg.Content,
-			Timestamp: time.Unix(msg.TimeStamp, 0),
-			IsMe:      msg.Sender == m.username,
-		})
+		protocolMsg := protocol.Message(msg)
+
+		// Проверяем тип сообщения
+		switch protocolMsg.Action {
+		case protocol.TypeFileRequest,
+			protocol.TypeFileHeader,
+			protocol.TypeFileChunk,
+			protocol.TypeFileComplete,
+			protocol.TypeFileError:
+			return m, nil
+		default:
+			// Обычное сообщение
+			targetChat := getTargetChat(protocolMsg, m.username)
+			m.addMessageToChat(targetChat, chatMessage{
+				Sender:    msg.Sender,
+				Content:   msg.Content,
+				Timestamp: time.Unix(msg.TimeStamp, 0),
+				IsMe:      msg.Sender == m.username,
+			})
+		}
+
 		return m, nil
 	}
 
