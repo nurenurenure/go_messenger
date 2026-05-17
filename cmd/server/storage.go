@@ -8,63 +8,51 @@ import (
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
+	_ "modernc.org/sqlite"
 )
 
 type Storage struct {
 	db *sql.DB
 }
 
-// открыть файл базы и создать таблицу, если ее нет
 func InitStorage(path string) *Storage {
 	db, err := sql.Open("sqlite", path)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	//создать таблицу для сообщений
-	query := `
-	CREATE TABLE IF NOT EXISTS messages(
-	id INTEGER PRIMARY KEY AUTOINCREMENT,
-	sender TEXT,
-	recipient TEXT,
-	content TEXT,
-	timestamp INTEGER,
-	action TEXT
-	);`
-
-	//таблица для системных логов
-
-	queryLogs := `
-	CREATE TABLE IF NOT EXISTS system_logs(
-	id INTEGER PRIMARY KEY AUTOINCREMENT,
-	event_type TEXT,
-	details TEXT,
-	timestamp INTEGER
-	);`
-
-	queryUsers := `
-	CREATE TABLE IF NOT EXISTS users(
-	username TEXT PRIMARY KEY,
-	password_hash TEXT NOT NULL
-	);`
-
-	_, err = db.Exec(query)
-	if err != nil {
-		log.Fatal(err)
+	// Создание таблиц
+	queries := []string{
+		`CREATE TABLE IF NOT EXISTS messages(
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			sender TEXT,
+			recipient TEXT,
+			content TEXT,
+			timestamp INTEGER,
+			action TEXT
+		);`,
+		`CREATE TABLE IF NOT EXISTS system_logs(
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			event_type TEXT,
+			details TEXT,
+			timestamp INTEGER
+		);`,
+		`CREATE TABLE IF NOT EXISTS users(
+			username TEXT PRIMARY KEY,
+			password_hash TEXT NOT NULL
+		);`,
 	}
-	_, err = db.Exec(queryLogs)
-	if err != nil {
-		log.Fatal(err)
+
+	for _, query := range queries {
+		if _, err = db.Exec(query); err != nil {
+			log.Fatal(err)
+		}
 	}
-	_, err = db.Exec(queryUsers)
-	if err != nil {
-		log.Fatal(err)
-	}
+
 	return &Storage{db: db}
-
 }
 
-// записать системный лог
+// Системные логи
 func (s *Storage) LogEvent(eventType, details string) {
 	query := `INSERT INTO system_logs (event_type, details, timestamp) VALUES (?, ?, ?)`
 	_, err := s.db.Exec(query, eventType, details, time.Now().Unix())
@@ -73,7 +61,6 @@ func (s *Storage) LogEvent(eventType, details string) {
 	}
 }
 
-// вернуть ограниченное количество логов для админа
 func (s *Storage) GetSystemLogs(limit int) ([]string, error) {
 	query := `SELECT event_type, details, timestamp FROM system_logs ORDER BY timestamp DESC LIMIT ?`
 	rows, err := s.db.Query(query, limit)
@@ -81,13 +68,13 @@ func (s *Storage) GetSystemLogs(limit int) ([]string, error) {
 		return nil, err
 	}
 	defer rows.Close()
+
 	var logs []string
 	for rows.Next() {
 		var eventType, details string
 		var timestamp int64
 		rows.Scan(&eventType, &details, &timestamp)
 
-		//форматированная строка лога
 		t := time.Unix(timestamp, 0).Format("15:04:05")
 		logEntry := fmt.Sprintf("[%s] %s: %s", t, eventType, details)
 		logs = append(logs, logEntry)
@@ -95,7 +82,7 @@ func (s *Storage) GetSystemLogs(limit int) ([]string, error) {
 	return logs, nil
 }
 
-// вернуть ограниченное количество последних сообщений для админа
+// Логи сообщений
 func (s *Storage) GetMessageLogs(limit int) ([]string, error) {
 	query := `SELECT sender, recipient, content, timestamp FROM messages ORDER BY timestamp DESC LIMIT ?`
 	rows, err := s.db.Query(query, limit)
@@ -116,14 +103,13 @@ func (s *Storage) GetMessageLogs(limit int) ([]string, error) {
 	return logs, err
 }
 
-// сохранить сообщение в базу
+// Сообщения
 func (s *Storage) SaveMessage(msg protocol.Message) error {
 	query := `INSERT INTO messages(sender, recipient, content, timestamp, action) VALUES (?, ?, ?, ?, ?)`
 	_, err := s.db.Exec(query, msg.Sender, msg.Recipient, msg.Content, msg.TimeStamp, msg.Action)
 	return err
 }
 
-// достать историю сообщений для конкретного пользователя
 func (s *Storage) GetHistory(username string) ([]protocol.Message, error) {
 	query := `SELECT sender, recipient, content, timestamp, action
 	 FROM messages WHERE recipient = ? OR sender = ?
@@ -137,7 +123,6 @@ func (s *Storage) GetHistory(username string) ([]protocol.Message, error) {
 
 	var history []protocol.Message
 	for rows.Next() {
-		//гарантия чистого объекта
 		var m protocol.Message
 		err := rows.Scan(&m.Sender, &m.Recipient, &m.Content, &m.TimeStamp, &m.Action)
 		if err != nil {
@@ -148,7 +133,7 @@ func (s *Storage) GetHistory(username string) ([]protocol.Message, error) {
 	return history, nil
 }
 
-// Регистрация
+// Пользователи
 func (s *Storage) RegisterUser(username, password string) error {
 	hash, _ := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	_, err := s.db.Exec("INSERT INTO users(username, password_hash) VALUES (?, ?)", username, string(hash))
@@ -167,9 +152,7 @@ func (s *Storage) CheckPassword(username, password string) bool {
 
 func (s *Storage) UserExists(username string) bool {
 	var name string
-
 	err := s.db.QueryRow("SELECT username FROM users WHERE username = ?", username).Scan(&name)
-
 	return err == nil
 }
 
