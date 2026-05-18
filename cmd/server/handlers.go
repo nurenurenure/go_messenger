@@ -16,6 +16,9 @@ func (s *Server) handleClient(conn net.Conn) {
 	if err != nil {
 		return
 	}
+	if s.shuttingDown {
+		return
+	}
 
 	s.addClient(username, conn)
 	defer s.cleanupClient(username, conn)

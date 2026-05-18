@@ -1,8 +1,10 @@
 package main
 
 import (
+	"fmt"
 	"net"
 	"sync"
+	"time"
 
 	"messenger/protocol"
 )
@@ -12,14 +14,16 @@ type Server struct {
 	groups        map[string]map[string]net.Conn
 	mu            sync.Mutex
 	storage       *Storage
-	fileTransfers *FileTransferManager // ДОБАВИТЬ
+	fileTransfers *FileTransferManager
+	shuttingDown  bool
 }
 
 func NewServer() *Server {
 	return &Server{
 		clients:       make(map[string]net.Conn),
 		groups:        make(map[string]map[string]net.Conn),
-		fileTransfers: NewFileTransferManager(), // ДОБАВИТЬ
+		fileTransfers: NewFileTransferManager(),
+		shuttingDown:  false,
 	}
 }
 
@@ -109,4 +113,38 @@ func (s *Server) getOnlineCount() int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return len(s.clients)
+}
+
+// notifyClientsAboutShutdown уведомляет всех клиентов о скором отключении
+func (s *Server) notifyClientsAboutShutdown() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	shutdownMsg := protocol.Message{
+		Sender:    "Сервер",
+		Recipient: "all",
+		Content:   "Сервер завершает работу. До свидания!",
+		Action:    protocol.TypeSystem,
+		TimeStamp: time.Now().Unix(),
+	}
+
+	for username, conn := range s.clients {
+		fmt.Printf("Уведомляем пользователя %s...\n", username)
+		protocol.WritePacket(conn, protocol.TypeSystem, shutdownMsg)
+	}
+}
+
+// closeAllConnections закрывает все клиентские соединения
+func (s *Server) closeAllConnections() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for username, conn := range s.clients {
+		fmt.Printf("Закрываем соединение с %s\n", username)
+		conn.Close()
+	}
+
+	// Очищаем мапы
+	s.clients = make(map[string]net.Conn)
+	s.groups = make(map[string]map[string]net.Conn)
 }

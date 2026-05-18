@@ -2,35 +2,37 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"os"
 )
 
 // handleAdminCommands обрабатывает команды администратора
-func handleAdminCommands(srv *Server) {
+func handleAdminCommands(srv *Server, cancel context.CancelFunc) {
 	scanner := bufio.NewScanner(os.Stdin)
-	fmt.Println("Доступные команды сервера: /logs, /filelogs, /msglogs, /users, /exit")
+	fmt.Println("Доступные команды: /logs, /msglogs, /filelogs, /users, /exit")
 
 	for scanner.Scan() {
 		command := scanner.Text()
-		srv.executeAdminCommand(command)
+		srv.executeAdminCommand(command, cancel)
 	}
 }
 
 // executeAdminCommand выполняет конкретную админскую команду
-func (s *Server) executeAdminCommand(command string) {
+func (s *Server) executeAdminCommand(command string, cancel context.CancelFunc) {
 	switch command {
-	case "/filelogs":
-		s.showFileLogs()
 	case "/logs":
 		s.showSystemLogs()
 	case "/users":
 		s.showOnlineUsers()
 	case "/msglogs":
 		s.showMessageLogs()
+	case "/filelogs":
+		s.showFileLogs()
 	case "/exit":
+		fmt.Println("Завершение работы сервера...")
 		s.storage.LogEvent("SERVER_STOP", "Сервер остановлен администратором")
-		os.Exit(0)
+		cancel()
 	default:
 		fmt.Println("Неизвестная команда")
 	}

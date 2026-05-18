@@ -92,25 +92,47 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case serverMsg:
 		protocolMsg := protocol.Message(msg)
 
-		// Проверяем тип сообщения
-		switch protocolMsg.Action {
-		case protocol.TypeFileRequest,
-			protocol.TypeFileHeader,
-			protocol.TypeFileChunk,
-			protocol.TypeFileComplete,
-			protocol.TypeFileError:
-			return m, nil
-		default:
-			// Обычное сообщение
+		// Проверяем системные сообщения
+		if protocolMsg.Action == protocol.TypeSystem {
+			if strings.Contains(protocolMsg.Content, "Сервер завершает работу") {
+				// Показываем уведомление во всех чатах
+				for chatName := range m.chats {
+					m.addMessageToChat(chatName, chatMessage{
+						Sender:    "Система",
+						Content:   "⚠️ " + protocolMsg.Content,
+						Timestamp: time.Unix(protocolMsg.TimeStamp, 0),
+						IsMe:      false,
+					})
+				}
+
+				// Если нет активных чатов, показываем в текущем
+				if m.activeChat == "" && len(m.contacts) > 0 {
+					m.activeChat = m.contacts[0]
+				}
+
+				m.refreshViewport()
+				return m, nil
+			}
+
+			// Другие системные сообщения
 			targetChat := getTargetChat(protocolMsg, m.username)
 			m.addMessageToChat(targetChat, chatMessage{
-				Sender:    msg.Sender,
-				Content:   msg.Content,
-				Timestamp: time.Unix(msg.TimeStamp, 0),
-				IsMe:      msg.Sender == m.username,
+				Sender:    "Система",
+				Content:   protocolMsg.Content,
+				Timestamp: time.Unix(protocolMsg.TimeStamp, 0),
+				IsMe:      false,
 			})
+			return m, nil
 		}
 
+		// Обычные сообщения
+		targetChat := getTargetChat(protocolMsg, m.username)
+		m.addMessageToChat(targetChat, chatMessage{
+			Sender:    protocolMsg.Sender,
+			Content:   protocolMsg.Content,
+			Timestamp: time.Unix(protocolMsg.TimeStamp, 0),
+			IsMe:      protocolMsg.Sender == m.username,
+		})
 		return m, nil
 	}
 

@@ -52,7 +52,6 @@ func main() {
 	// Создаем программу
 	p := tea.NewProgram(m, tea.WithAltScreen())
 
-	// Запускаем прослушивание сообщений
 	go func() {
 		for {
 			msgType, payload, err := protocol.ReadPacket(conn)
@@ -71,8 +70,8 @@ func main() {
 				continue
 			}
 
-			// Обычные сообщения
-			if msgType == protocol.TypeChat {
+			// Обычные и системные сообщения
+			if msgType == protocol.TypeChat || msgType == protocol.TypeSystem {
 				var incoming protocol.Message
 				if json.Unmarshal(payload, &incoming) == nil {
 					p.Send(serverMsg(incoming))
