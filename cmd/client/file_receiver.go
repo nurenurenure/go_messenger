@@ -186,9 +186,7 @@ func (fr *FileReceiver) handleFileComplete(payload []byte) {
 		return
 	}
 
-	if complete.Status == "ok" {
-		fmt.Println("Файл успешно доставлен получателю")
-	} else {
+	if complete.Status != "ok" {
 		fmt.Println("Ошибка при передаче файла")
 	}
 }

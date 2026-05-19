@@ -62,7 +62,9 @@ func (s *Storage) LogEvent(eventType, details string) {
 }
 
 func (s *Storage) GetSystemLogs(limit int) ([]string, error) {
-	query := `SELECT event_type, details, timestamp FROM system_logs ORDER BY timestamp DESC LIMIT ?`
+	query := `SELECT event_type, details, timestamp FROM system_logs 
+	WHERE event_type NOT LIKE 'FILE_%' 
+	ORDER BY timestamp DESC LIMIT ?`
 	rows, err := s.db.Query(query, limit)
 	if err != nil {
 		return nil, err
