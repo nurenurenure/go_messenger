@@ -52,9 +52,29 @@ func (m *model) refreshViewport() {
 	}
 
 	m.viewport.SetContent(strings.Join(lines, "\n"))
-
+	//скролл за выделенным сообщением
 	if m.replyTo == nil {
 		m.viewport.GotoBottom()
+	} else {
+		//расчет строк до выделенного
+		topLine := 0
+		for i := 0; i < m.selectedMsgIdx; i++ {
+			topLine += strings.Count(lines[i], "\n") + 1
+
+		}
+		//расчет высоты самого выбранного сообщения
+		msgHeight := strings.Count(lines[m.selectedMsgIdx], "\n") + 1
+		bottomLine := topLine + msgHeight
+
+		//получение текущих видимых границ
+		viewTop := m.viewport.YOffset
+		viewBottom := viewTop + m.viewport.Height
+		//проверка, выходит ли сообщение за рамки и скроллинг
+		if topLine < viewTop {
+			m.viewport.SetYOffset(topLine)
+		} else if bottomLine > viewBottom {
+			m.viewport.SetYOffset(bottomLine - m.viewport.Height)
+		}
 	}
 }
 
