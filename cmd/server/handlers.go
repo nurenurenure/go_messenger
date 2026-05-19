@@ -12,7 +12,7 @@ import (
 func (s *Server) handleClient(conn net.Conn) {
 	defer conn.Close()
 
-	username, err := s.authenticate(conn)
+	username, lastSyncTime, err := s.authenticate(conn)
 	if err != nil {
 		return
 	}
@@ -24,16 +24,16 @@ func (s *Server) handleClient(conn net.Conn) {
 	defer s.cleanupClient(username, conn)
 
 	s.storage.LogEvent("USER_LOGIN", "Пользователь "+username+" вошел в сеть")
-	fmt.Printf("Пользователь %s вошел в чат\n", username)
+	fmt.Printf("Пользователь %s вошел в чат (Синхронизация с: %d)\n", username, lastSyncTime)
 
-	s.sendHistory(conn, username)
+	s.sendHistory(conn, username, lastSyncTime)
 	s.messageLoop(conn, username)
 }
 
-func (s *Server) authenticate(conn net.Conn) (string, error) {
+func (s *Server) authenticate(conn net.Conn) (string, int64, error) {
 	msgType, payload, err := protocol.ReadPacket(conn)
 	if err != nil || msgType != protocol.TypeAuth {
-		return "", fmt.Errorf("ошибка авторизации")
+		return "", 0, fmt.Errorf("ошибка авторизации")
 	}
 
 	var authData protocol.Message
@@ -41,17 +41,17 @@ func (s *Server) authenticate(conn net.Conn) (string, error) {
 
 	if s.storage.UserExists(authData.Sender) {
 		if !s.storage.CheckPassword(authData.Sender, authData.Content) {
-			return "", fmt.Errorf("неверный пароль")
+			return "", 0, fmt.Errorf("неверный пароль")
 		}
 	} else {
 		s.storage.RegisterUser(authData.Sender, authData.Content)
 	}
 
 	protocol.WritePacket(conn, protocol.TypeAuth, protocol.Message{Content: "Ok"})
-	return authData.Sender, nil
+	return authData.Sender, authData.TimeStamp, nil
 }
 
-func (s *Server) sendHistory(conn net.Conn, username string) {
+func (s *Server) sendHistory(conn net.Conn, username string, lastSyncTime int64) {
 	history, err := s.storage.GetHistory(username)
 	if err != nil {
 		fmt.Println("Ошибка получения истории:", err)
@@ -59,7 +59,10 @@ func (s *Server) sendHistory(conn net.Conn, username string) {
 	}
 
 	for _, msg := range history {
-		protocol.WritePacket(conn, protocol.TypeChat, msg)
+		if msg.TimeStamp > lastSyncTime {
+			protocol.WritePacket(conn, protocol.TypeChat, msg)
+
+		}
 	}
 }
 

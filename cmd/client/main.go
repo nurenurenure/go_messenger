@@ -25,11 +25,21 @@ func main() {
 	var password string
 	fmt.Scanln(&password)
 
+	// Инициализация БД
+	db, err := initDB(username, password)
+	if err != nil {
+		log.Fatal("Не удалось открыть базу данных", err)
+	}
+	defer db.Close()
+
+	lastSyncTime := getLastSync(db)
+
 	// Авторизация
 	authMsg := protocol.Message{
-		Sender:  username,
-		Content: password,
-		Action:  protocol.TypeAuth,
+		Sender:    username,
+		Content:   password,
+		Action:    protocol.TypeAuth,
+		TimeStamp: lastSyncTime,
 	}
 	protocol.WritePacket(conn, protocol.TypeAuth, authMsg)
 
@@ -38,13 +48,6 @@ func main() {
 		fmt.Println("Ошибка авторизации. Проверьте логин/пароль.")
 		return
 	}
-
-	// Инициализация БД
-	db, err := initDB(username, password)
-	if err != nil {
-		log.Fatal("Не удалось открыть базу данных", err)
-	}
-	defer db.Close()
 
 	// Создаем модель
 	m := InitialModel(conn, username, db)
@@ -74,6 +77,10 @@ func main() {
 			if msgType == protocol.TypeChat || msgType == protocol.TypeSystem {
 				var incoming protocol.Message
 				if json.Unmarshal(payload, &incoming) == nil {
+					if incoming.TimeStamp > 0 {
+						updateLastSync(db, incoming.TimeStamp)
+
+					}
 					p.Send(serverMsg(incoming))
 				}
 			}

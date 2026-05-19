@@ -59,8 +59,8 @@ func InitialModel(conn net.Conn, username string, db *badger.DB) *model {
 		contacts:     []string{},
 		activeChat:   "",
 		db:           db,
-		fileReceiver: NewFileReceiver(conn, username), // ДОБАВИТЬ
-		fileSender:   NewFileSender(conn, username),   // ДОБАВИТЬ
+		fileReceiver: NewFileReceiver(conn, username),
+		fileSender:   NewFileSender(conn, username),
 	}
 
 	m.contacts, m.chats = loadAllContacts(db)
@@ -72,7 +72,6 @@ func InitialModel(conn net.Conn, username string, db *badger.DB) *model {
 	// Настройка callback для получения файлов
 	m.fileReceiver.SetOnComplete(func(fileName string, filePath string) {
 		// Добавляем сообщение в чат о полученном файле
-		// Нужно определить, от кого файл (можно из FileID)
 	})
 
 	return m

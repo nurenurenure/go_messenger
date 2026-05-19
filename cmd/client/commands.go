@@ -90,7 +90,7 @@ func (m *model) handleFileCommand(content string) {
 			return
 		}
 
-		// Ждем подтверждения (в реальном коде нужно слушать TypeFileAccept)
+		// Ждем подтверждения
 		time.Sleep(1 * time.Second)
 
 		err = m.fileSender.SendFile(*header, filePath, nil)

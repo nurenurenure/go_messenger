@@ -72,6 +72,10 @@ func loadAllContacts(db *badger.DB) ([]string, map[string][]chatMessage) {
 
 		for it.Rewind(); it.Valid(); it.Next() {
 			key := string(it.Item().Key())
+			//игнор системных ключей
+			if strings.HasPrefix(key, "system:") {
+				continue
+			}
 			parts := strings.Split(key, ":")
 			if len(parts) > 0 && !seen[parts[0]] {
 				name := parts[0]
@@ -84,4 +88,28 @@ func loadAllContacts(db *badger.DB) ([]string, map[string][]chatMessage) {
 	})
 
 	return contacts, chats
+}
+
+// Сохраняем время последнего сообщения
+func updateLastSync(db *badger.DB, timestamp int64) {
+	db.Update(func(txn *badger.Txn) error {
+		return txn.Set([]byte("system:last_sync"), []byte(fmt.Sprintf("%d", timestamp)))
+	})
+}
+
+// получаем время последнего сообщения
+func getLastSync(db *badger.DB) int64 {
+	var lastSync int64 = 0
+	db.View(func(txn *badger.Txn) error {
+		item, err := txn.Get([]byte("system:last_sync"))
+		if err == nil {
+			item.Value(func(v []byte) error {
+				fmt.Sscanf(string(v), "%d", &lastSync)
+				return nil
+			})
+		}
+		return err
+	})
+	return lastSync
+
 }

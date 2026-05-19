@@ -69,6 +69,7 @@ func (m *model) sendMessage(content string) {
 		IsMe:      true,
 	}
 	m.addMessageToChat(m.activeChat, msgToSave)
+	updateLastSync(m.db, pMsg.TimeStamp)
 
 	m.replyTo = nil
 	m.forwardMsg = nil
