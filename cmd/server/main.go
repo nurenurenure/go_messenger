@@ -126,10 +126,9 @@ func main() {
 		fmt.Println("Все соединения закрыты")
 	case <-time.After(5 * time.Second):
 		fmt.Println("Таймаут ожидания закрытия соединений")
+		srv.closeAllConnections()
+
+		wg.Wait()
 	}
-
-	// Закрываем все оставшиеся соединения
-	srv.closeAllConnections()
-
 	fmt.Println("Сервер остановлен")
 }
