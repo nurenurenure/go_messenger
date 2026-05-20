@@ -61,6 +61,23 @@ func loadHistory(db *badger.DB, chatName string) []chatMessage {
 	})
 	return history
 }
+
+// deleteChatHistory удаляет все сообщения конкретного чата из локальной БД
+func deleteChatHistory(db *badger.DB, chatName string) {
+	db.Update(func(txn *badger.Txn) error {
+		it := txn.NewIterator(badger.DefaultIteratorOptions)
+		defer it.Close()
+
+		prefix := []byte(chatName + ":")
+		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+			err := txn.Delete(it.Item().KeyCopy(nil))
+			if err != nil {
+				return nil
+			}
+		}
+		return nil
+	})
+}
 func loadAllContacts(db *badger.DB) ([]string, map[string][]chatMessage) {
 	contacts := []string{}
 	chats := make(map[string][]chatMessage)

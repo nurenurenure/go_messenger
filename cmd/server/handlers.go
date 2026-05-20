@@ -109,10 +109,33 @@ func (s *Server) handleSystemMessage(payload []byte, username string) {
 	var sysMsg protocol.Message
 	json.Unmarshal(payload, &sysMsg)
 
-	if sysMsg.Content == "LEAVE" {
-		s.removeClient(username)
-		s.storage.RemoveUserFromGroupHistory(username, sysMsg.Recipient)
-		fmt.Printf("Пользователь %s покинул чат %s\n", username, sysMsg.Recipient)
+	target := sysMsg.Recipient
+
+	switch sysMsg.Content {
+	case "LEAVE":
+		if strings.HasPrefix(target, "#") {
+			s.removeFromGroup(target, username)
+			s.storage.RemoveUserFromGroupHistory(username, target)
+			fmt.Printf("Пользователь %s покинул чат %s\n", username, target)
+		} else {
+			//Личный чат
+			s.mu.Lock()
+			if s.ignored[username] == nil {
+				s.ignored[username] = make(map[string]bool)
+			}
+			s.ignored[username][target] = true
+			s.mu.Unlock()
+			fmt.Printf("Пользователь %s удалил чат с %s(входящие заблокированы)\n", username, target)
+		}
+	case "JOIN":
+		if !strings.HasPrefix(target, "#") {
+			s.mu.Lock()
+			if s.ignored[username] != nil {
+				delete(s.ignored[username], target)
+			}
+			s.mu.Unlock()
+			fmt.Printf("Пользователь %s восстановил чат с %s (входящие разрешены)\n", username, target)
+		}
 	}
 }
 

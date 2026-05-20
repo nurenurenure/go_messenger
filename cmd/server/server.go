@@ -12,6 +12,7 @@ import (
 type Server struct {
 	clients       map[string]net.Conn
 	groups        map[string]map[string]net.Conn
+	ignored       map[string]map[string]bool
 	mu            sync.Mutex
 	storage       *Storage
 	fileTransfers *FileTransferManager
@@ -22,6 +23,7 @@ func NewServer() *Server {
 	return &Server{
 		clients:       make(map[string]net.Conn),
 		groups:        make(map[string]map[string]net.Conn),
+		ignored:       make(map[string]map[string]bool),
 		fileTransfers: NewFileTransferManager(),
 		shuttingDown:  false,
 	}
@@ -69,6 +71,19 @@ func (s *Server) addToGroup(groupName, username string) {
 	}
 }
 
+func (s *Server) removeFromGroup(groupName, username string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if group, exists := s.groups[groupName]; exists {
+		delete(group, username)
+
+		if len(group) == 0 {
+			delete(s.groups, groupName)
+		}
+	}
+}
+
 func (s *Server) broadcastToGroup(groupName, sender string, msg protocol.Message) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -88,6 +103,11 @@ func (s *Server) broadcastToGroup(groupName, sender string, msg protocol.Message
 func (s *Server) sendToUser(username string, msg protocol.Message) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	//проверка на блокировку у другого пользователя
+	if s.ignored[username] != nil && s.ignored[username][msg.Sender] {
+		return false
+	}
 
 	conn, ok := s.clients[username]
 	if !ok {

@@ -67,13 +67,20 @@ func (m *model) removeChat(target string) {
 	}
 	m.contacts = newContacts
 
-	// Переключаем активный чат
+	//Очистка бд
+	if m.db != nil {
+		deleteChatHistory(m.db, target)
+	}
+
+	//корректировка индексов
 	if m.activeChat == target {
-		m.activeChat = ""
 		if len(m.contacts) > 0 {
 			m.activeChat = m.contacts[0]
+		} else {
+			m.activeChat = ""
 		}
 	}
+	m.refreshViewport()
 }
 
 // switchToNextContact переключает на следующий контакт

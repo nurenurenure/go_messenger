@@ -13,15 +13,19 @@ func (m *model) handleCommand(content string) bool {
 	switch {
 	case strings.HasPrefix(content, "/add "):
 		name := strings.TrimSpace(strings.TrimPrefix(content, "/add "))
-		m.addContact(name)
+		if m.addContact(name) {
+			joinMsg := protocol.Message{
+				Sender:    m.username,
+				Recipient: name,
+				Action:    protocol.TypeSystem,
+				Content:   "JOIN",
+			}
+			protocol.WritePacket(m.conn, protocol.TypeSystem, joinMsg)
+		}
 		return true
 
 	case strings.HasPrefix(content, "/file "):
 		m.handleFileCommand(content)
-		return true
-	case strings.HasPrefix(content, "/add "):
-		name := strings.TrimSpace(strings.TrimPrefix(content, "/add "))
-		m.addContact(name)
 		return true
 
 	case strings.HasPrefix(content, "/join "):
@@ -56,7 +60,6 @@ func (m *model) handleCommand(content string) bool {
 	case strings.HasPrefix(content, "/leave "):
 		target := strings.TrimSpace(strings.TrimPrefix(content, "/leave "))
 		m.removeChat(target)
-
 		// Системное сообщение серверу
 		leaveMsg := protocol.Message{
 			Sender:    m.username,
