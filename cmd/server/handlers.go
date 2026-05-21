@@ -9,6 +9,7 @@ import (
 	"messenger/protocol"
 )
 
+// точка входа для каждого соединения
 func (s *Server) handleClient(conn net.Conn) {
 	defer conn.Close()
 
@@ -21,7 +22,7 @@ func (s *Server) handleClient(conn net.Conn) {
 	}
 
 	s.addClient(username, conn)
-	defer s.cleanupClient(username, conn)
+	defer s.cleanupClient(username)
 
 	s.storage.LogEvent("USER_LOGIN", "Пользователь "+username+" вошел в сеть")
 	fmt.Printf("Пользователь %s вошел в чат (Синхронизация с: %d)\n", username, lastSyncTime)
@@ -57,7 +58,7 @@ func (s *Server) sendHistory(conn net.Conn, username string, lastSyncTime int64)
 		fmt.Println("Ошибка получения истории:", err)
 		return
 	}
-
+	//инкрементальная синхронизация
 	for _, msg := range history {
 		if msg.TimeStamp > lastSyncTime {
 			protocol.WritePacket(conn, protocol.TypeChat, msg)
@@ -72,7 +73,7 @@ func (s *Server) messageLoop(conn net.Conn, username string) {
 		if err != nil {
 			return
 		}
-
+		//маршрутизация по типу пакета
 		switch msgType {
 		case protocol.TypeChat:
 			s.handleChatMessage(payload)
@@ -115,7 +116,6 @@ func (s *Server) handleSystemMessage(payload []byte, username string) {
 	case "LEAVE":
 		if strings.HasPrefix(target, "#") {
 			s.removeFromGroup(target, username)
-			s.storage.RemoveUserFromGroupHistory(username, target)
 			fmt.Printf("Пользователь %s покинул чат %s\n", username, target)
 		} else {
 			//Личный чат
@@ -139,9 +139,8 @@ func (s *Server) handleSystemMessage(payload []byte, username string) {
 	}
 }
 
-func (s *Server) cleanupClient(username string, conn net.Conn) {
+func (s *Server) cleanupClient(username string) {
 	s.storage.LogEvent("USER_LOGOUT", "Пользователь "+username+" вышел из сети")
 	s.removeClient(username)
-	conn.Close()
 	fmt.Printf("Пользователь %s покинул чат\n", username)
 }

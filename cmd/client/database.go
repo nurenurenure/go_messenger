@@ -17,7 +17,7 @@ func initDB(username, rawPassword string) (*badger.DB, error) {
 	if err := os.MkdirAll("user_data", 0755); err != nil {
 		return nil, err
 	}
-
+	//Пароль как ключ шифрования
 	keyHash := sha256.Sum256([]byte(rawPassword))
 
 	opts := badger.DefaultOptions(path)
@@ -63,7 +63,7 @@ func loadHistory(db *badger.DB, chatName string) []chatMessage {
 }
 
 // deleteChatHistory удаляет все сообщения конкретного чата из локальной БД
-func deleteChatHistory(db *badger.DB, chatName string) {
+func deleteChatHistory(db *badger.DB, chatName string) error {
 	db.Update(func(txn *badger.Txn) error {
 		it := txn.NewIterator(badger.DefaultIteratorOptions)
 		defer it.Close()
@@ -72,12 +72,18 @@ func deleteChatHistory(db *badger.DB, chatName string) {
 		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
 			err := txn.Delete(it.Item().KeyCopy(nil))
 			if err != nil {
-				return nil
+				return err
 			}
 		}
 		return nil
 	})
+	return nil
 }
+
+// сканирует все ключи в БД.
+// пропускает системные ключи (system:last_sync).
+// парсит имя чата как часть до первого :.
+// для каждого уникального имени чата: добавляет в список контактов и загружает всю историю через loadHistory.
 func loadAllContacts(db *badger.DB) ([]string, map[string][]chatMessage) {
 	contacts := []string{}
 	chats := make(map[string][]chatMessage)

@@ -19,8 +19,9 @@ func (m *model) formatMessageContent(content string) string {
 
 	if m.replyTo != nil && content != "" {
 		preview := m.replyTo.Content
-		if len(preview) > 30 {
-			preview = preview[:27] + "..."
+		runes := []rune(preview)
+		if len(runes) > 30 {
+			preview = string(runes[:27]) + "..."
 		}
 		return fmt.Sprintf("%s  >[%s]: %s", content, m.replyTo.Sender, preview)
 	}

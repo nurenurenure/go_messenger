@@ -29,7 +29,7 @@ func InitStorage(path string) *Storage {
 			recipient TEXT,
 			content TEXT,
 			timestamp INTEGER,
-			action TEXT
+			action INTEGER
 		);`,
 		`CREATE TABLE IF NOT EXISTS system_logs(
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -72,6 +72,7 @@ func (s *Storage) GetSystemLogs(limit int) ([]string, error) {
 	defer rows.Close()
 
 	var logs []string
+	//итерация по результатам
 	for rows.Next() {
 		var eventType, details string
 		var timestamp int64
@@ -156,12 +157,6 @@ func (s *Storage) UserExists(username string) bool {
 	var name string
 	err := s.db.QueryRow("SELECT username FROM users WHERE username = ?", username).Scan(&name)
 	return err == nil
-}
-
-func (s *Storage) RemoveUserFromGroupHistory(username, groupName string) error {
-	query := `DELETE FROM messages WHERE sender = ? AND recipient = ?`
-	_, err := s.db.Exec(query, username, groupName)
-	return err
 }
 
 // LogFileEvent логирует событие передачи файла

@@ -108,7 +108,7 @@ func (fr *FileReceiver) handleFileChunk(payload []byte) {
 	if !ok {
 		return
 	}
-
+	// Копирование данных
 	data := make([]byte, chunk.Size)
 	copy(data, chunk.Data[:chunk.Size])
 	receiving.Chunks[chunk.ChunkIndex] = data
@@ -128,6 +128,11 @@ func (fr *FileReceiver) handleFileChunk(payload []byte) {
 		fr.assembleFile(chunk.FileID)
 	}
 }
+
+// Проверка наличия всех чанков
+// Сборка в один слайс
+// Вычисление контрольной суммы — SHA-256 собранного файла
+// Сравнение с ожидаемой (от отправителя)
 func (fr *FileReceiver) assembleFile(fileID string) {
 	receiving, ok := fr.activeFiles[fileID]
 	if !ok {

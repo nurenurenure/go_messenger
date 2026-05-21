@@ -96,7 +96,7 @@ func (m *model) switchToNextContact() {
 			break
 		}
 	}
-
+	//циклический индекс
 	nextIndex := (currentIndex + 1) % len(m.contacts)
 	m.activeChat = m.contacts[nextIndex]
 	m.refreshViewport()

@@ -7,6 +7,7 @@ import (
 	"net"
 )
 
+// константы типов сообщений
 const (
 	TypeAuth   uint8 = 0x01
 	TypeChat   uint8 = 0x02
@@ -24,8 +25,9 @@ type Message struct {
 	Action    uint8  `json:"action"`
 }
 
+// отправка пакета
 func WritePacket(conn net.Conn, msgType uint8, data interface{}) error {
-	//превратить структуру в JSON
+	//JSON-сериализация
 	payload, err := json.Marshal(data)
 	if err != nil {
 		return err
@@ -39,6 +41,7 @@ func WritePacket(conn net.Conn, msgType uint8, data interface{}) error {
 	return err
 }
 
+// чтение пакета
 func ReadPacket(conn net.Conn) (uint8, []byte, error) {
 	//прочитать заголовок
 	header := make([]byte, 5)

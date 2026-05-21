@@ -24,17 +24,20 @@ func NewFileSender(conn net.Conn, username string) *FileSender {
 }
 
 func (fs *FileSender) SendFileRequest(recipient, filePath string) (*protocol.FileHeader, error) {
+	//Проверка существования файла
 	fileInfo, err := os.Stat(filePath)
 	if err != nil {
 		return nil, fmt.Errorf("файл не найден: %w", err)
 	}
-
+	//Вычисление контрольной суммы
 	checksum, err := protocol.CalculateFileChecksum(filePath)
 	if err != nil {
 		return nil, fmt.Errorf("ошибка вычисления контрольной суммы: %w", err)
 	}
 
+	//Извлечение имени файла
 	fileName := filepath.Base(filePath)
+	//Генерация FileID
 	fileID := protocol.GenerateFileID(fs.username, recipient, fileName)
 
 	header := &protocol.FileHeader{
@@ -51,8 +54,15 @@ func (fs *FileSender) SendFileRequest(recipient, filePath string) (*protocol.Fil
 		return nil, fmt.Errorf("ошибка отправки запроса: %w", err)
 	}
 
+	//Заголовок создаётся один раз и передаётся между функциями
 	return header, nil
 }
+
+//header protocol.FileHeader — заголовок, созданный в SendFileRequest (по значению, не по указателю — ок, структура маленькая).
+
+//filePath string — путь к файлу (повторно открывается).
+
+//progressChan chan<- float64 — однонаправленный канал только для отправки.
 
 func (fs *FileSender) SendFile(header protocol.FileHeader, filePath string, progressChan chan<- float64) error {
 	file, err := os.Open(filePath)
@@ -65,12 +75,14 @@ func (fs *FileSender) SendFile(header protocol.FileHeader, filePath string, prog
 		return fmt.Errorf("ошибка отправки заголовка: %w", err)
 	}
 
+	//Вычисление количества чанков
 	totalChunks := int(header.FileSize / protocol.ChunkSize)
 	if header.FileSize%protocol.ChunkSize != 0 {
 		totalChunks++
 	}
 
-	buffer := make([]byte, protocol.ChunkSize)
+	//Цикл отправки чанков
+	buffer := make([]byte, protocol.ChunkSize) //переиспользуется для каждого чанка
 	for i := 0; i < totalChunks; i++ {
 		n, err := file.Read(buffer)
 		if err != nil && err != io.EOF {
@@ -81,14 +93,14 @@ func (fs *FileSender) SendFile(header protocol.FileHeader, filePath string, prog
 			FileID:      header.FileID,
 			ChunkIndex:  i,
 			TotalChunks: totalChunks,
-			Data:        buffer,
+			Data:        buffer[:n],
 			Size:        n,
 		}
 
 		if err := protocol.WritePacket(fs.conn, protocol.TypeFileChunk, chunk); err != nil {
 			return fmt.Errorf("ошибка отправки чанка %d: %w", i, err)
 		}
-
+		//канал прогресса
 		if progressChan != nil {
 			progressChan <- float64(i+1) / float64(totalChunks) * 100
 		}

@@ -71,12 +71,12 @@ func InitialModel(conn net.Conn, username string, db *badger.DB) *model {
 
 	// Настройка callback для получения файлов
 	m.fileReceiver.SetOnComplete(func(fileName string, filePath string) {
-		// Добавляем сообщение в чат о полученном файле
 	})
 
 	return m
 }
 
+// запуск бесконечного цикла мигания
 func (m *model) Init() tea.Cmd {
 	return textarea.Blink
 }
@@ -134,13 +134,15 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		})
 		return m, nil
 	}
-
+	// объявляем переменные для хранения команд
 	var (
 		tiCmd tea.Cmd
 		vpCmd tea.Cmd
 	)
+	// обновляем дочерние компоненты
 	m.textarea, tiCmd = m.textarea.Update(msg)
 	m.viewport, vpCmd = m.viewport.Update(msg)
+	//объединяем команды и возвращаем
 	return m, tea.Batch(tiCmd, vpCmd)
 }
 
@@ -216,7 +218,9 @@ func (m *model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// функция рендеринга
 func (m *model) View() string {
+	// собираем горизонтальную компоновку (сайдбар + чат)
 	mainLayout := lipgloss.JoinHorizontal(
 		lipgloss.Top,
 		m.renderSidebar(),
@@ -237,6 +241,7 @@ func (m *model) View() string {
 
 // autocompleteEmoji пытается дополнить код эмодзи
 func (m *model) autocompleteEmoji(input string) string {
+	//извлекаем последнее слово
 	lastWord := getLastWord(input)
 	if !strings.HasPrefix(lastWord, ":") {
 		return input
@@ -261,9 +266,11 @@ func (m *model) autocompleteEmoji(input string) string {
 }
 
 func (m *model) renderEmojiHints() string {
+	//Получаем текущий ввод и извлекаем последнее слово
 	currentInput := m.textarea.Value()
 	lastWord := getLastWord(currentInput)
 
+	//Не эмодзи или слишком короткое
 	if !strings.HasPrefix(lastWord, ":") || len(lastWord) < 2 {
 		return ""
 	}

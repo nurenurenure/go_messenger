@@ -7,6 +7,7 @@ import (
 	"messenger/protocol"
 )
 
+// роутинг по типу пакета
 func (s *Server) handleFileTransfer(msgType uint8, payload []byte, username string) {
 	switch msgType {
 	case protocol.TypeFileRequest:
@@ -85,9 +86,8 @@ func (s *Server) handleFileHeader(payload []byte, sender string) {
 	s.storage.LogFileEvent("FILE_START", sender, header.Recipient,
 		header.FileName, header.FileSize, header.FileID)
 
-	// Сохраняем информацию о передаче
 	s.fileTransfers.StartTransfer(header.FileID, sender, header.Recipient, header)
-
+	//заголовок пересылается получателю — тот теперь знает имя файла, размер и контрольную сумму
 	recipientConn, ok := s.getClient(header.Recipient)
 	if ok {
 		protocol.WritePacket(recipientConn, protocol.TypeFileHeader, header)

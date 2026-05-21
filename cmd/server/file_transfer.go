@@ -52,8 +52,12 @@ func (ftm *FileTransferManager) AddChunk(fileID string, chunkIndex int, data []b
 	}
 
 	transfer.Chunks[chunkIndex] = make([]byte, size)
-	copy(transfer.Chunks[chunkIndex], data[:size])
-
+	if size != len(data) {
+		delete(transfer.Chunks, chunkIndex)
+		return fmt.Errorf("несоответствие размеров чанка")
+	}
+	copy(transfer.Chunks[chunkIndex], data)
+	//Запись на диск
 	chunkPath := filepath.Join("file_transfers", fileID, fmt.Sprintf("chunk_%d", chunkIndex))
 	return os.WriteFile(chunkPath, data[:size], 0644)
 }
@@ -74,7 +78,7 @@ func (ftm *FileTransferManager) IsTransferComplete(fileID string) bool {
 	if !ok {
 		return false
 	}
-
+	//Вычисляет общее количество чанков
 	totalChunks := int(transfer.Header.FileSize / protocol.ChunkSize)
 	if transfer.Header.FileSize%protocol.ChunkSize != 0 {
 		totalChunks++
@@ -91,7 +95,7 @@ func (ftm *FileTransferManager) GetAssembledFile(fileID string) ([]byte, error) 
 	if !ok {
 		return nil, fmt.Errorf("передача не найдена: %s", fileID)
 	}
-
+	//вычисление ожидаемого количества чанков
 	totalChunks := int(transfer.Header.FileSize / protocol.ChunkSize)
 	if transfer.Header.FileSize%protocol.ChunkSize != 0 {
 		totalChunks++
@@ -103,6 +107,7 @@ func (ftm *FileTransferManager) GetAssembledFile(fileID string) ([]byte, error) 
 		if !exists {
 			return nil, fmt.Errorf("отсутствует чанк %d", i)
 		}
+		//добавляет данные чанка к результирующему слайсу
 		fileData = append(fileData, chunk...)
 	}
 
@@ -113,7 +118,10 @@ func (ftm *FileTransferManager) CompleteTransfer(fileID string) {
 	ftm.mu.Lock()
 	defer ftm.mu.Unlock()
 
-	delete(ftm.transfers, fileID)
 	tempDir := filepath.Join("file_transfers", fileID)
-	os.RemoveAll(tempDir)
+	if err := os.RemoveAll(tempDir); err != nil {
+		fmt.Printf("Ошибка удаления директории передачи %s: %v\n", fileID, err)
+	}
+
+	delete(ftm.transfers, fileID)
 }

@@ -16,6 +16,7 @@ func handleAdminCommands(srv *Server, cancel context.CancelFunc) {
 		command := scanner.Text()
 		srv.executeAdminCommand(command, cancel)
 	}
+
 }
 
 // executeAdminCommand выполняет конкретную админскую команду
@@ -58,7 +59,7 @@ func (s *Server) showOnlineUsers() {
 	}
 }
 
-// showMessageLogs показывает историю сообщений
+// showMessageLogs показывает логи сообщений
 func (s *Server) showMessageLogs() {
 	msgLogs, err := s.storage.GetMessageLogs(50)
 	if err != nil {
@@ -75,6 +76,8 @@ func (s *Server) showMessageLogs() {
 		fmt.Println(l)
 	}
 }
+
+// showFileLogs показывает логи файлов
 func (s *Server) showFileLogs() {
 	logs, err := s.storage.GetFileLogs(50)
 	if err != nil {

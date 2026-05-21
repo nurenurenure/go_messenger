@@ -53,6 +53,7 @@ func main() {
 	m := InitialModel(conn, username, db)
 
 	// Создаем программу
+	//tea.WithAltScreen() — запускает программу в альтернативном экране (как vim или less)
 	p := tea.NewProgram(m, tea.WithAltScreen())
 
 	go func() {
