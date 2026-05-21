@@ -113,26 +113,25 @@ func loadAllContacts(db *badger.DB) ([]string, map[string][]chatMessage) {
 	return contacts, chats
 }
 
-// Сохраняем время последнего сообщения
-func updateLastSync(db *badger.DB, timestamp int64) {
-	db.Update(func(txn *badger.Txn) error {
-		return txn.Set([]byte("system:last_sync"), []byte(fmt.Sprintf("%d", timestamp)))
-	})
+// getLastSyncFile возвращает путь к файлу с временем синхронизации
+func getLastSyncFile(username string) string {
+	return filepath.Join("user_data", "sync_"+username+".txt")
 }
 
-// получаем время последнего сообщения
-func getLastSync(db *badger.DB) int64 {
-	var lastSync int64 = 0
-	db.View(func(txn *badger.Txn) error {
-		item, err := txn.Get([]byte("system:last_sync"))
-		if err == nil {
-			item.Value(func(v []byte) error {
-				fmt.Sscanf(string(v), "%d", &lastSync)
-				return nil
-			})
-		}
-		return err
-	})
-	return lastSync
+// saveLastSyncToFile сохраняет время синхронизации в открытый файл
+func saveLastSyncToFile(username string, timestamp int64) {
+	path := getLastSyncFile(username)
+	os.WriteFile(path, []byte(fmt.Sprintf("%d", timestamp)), 0644)
+}
 
+// loadLastSyncFromFile читает время синхронизации из открытого файла
+func loadLastSyncFromFile(username string) int64 {
+	path := getLastSyncFile(username)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return 0 // файла нет → синхронизация с нуля
+	}
+	var ts int64
+	fmt.Sscanf(string(data), "%d", &ts)
+	return ts
 }

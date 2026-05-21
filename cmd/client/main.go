@@ -25,16 +25,9 @@ func main() {
 	var password string
 	fmt.Scanln(&password)
 
-	// Инициализация БД
-	db, err := initDB(username, password)
-	if err != nil {
-		log.Fatal("Не удалось открыть базу данных", err)
-	}
-	defer db.Close()
+	// lastSyncTime читаем из открытого файла
+	lastSyncTime := loadLastSyncFromFile(username)
 
-	lastSyncTime := getLastSync(db)
-
-	// Авторизация
 	authMsg := protocol.Message{
 		Sender:    username,
 		Content:   password,
@@ -45,17 +38,22 @@ func main() {
 
 	msgType, _, err := protocol.ReadPacket(conn)
 	if err != nil || msgType != protocol.TypeAuth {
-		fmt.Println("Ошибка авторизации. Проверьте логин/пароль.")
+		fmt.Println("Неверный пароль.")
 		return
 	}
 
-	// Создаем модель
-	m := InitialModel(conn, username, db)
+	//открываем БД
+	db, err := initDB(username, password)
+	if err != nil {
+		log.Fatal("Не удалось открыть базу данных:", err)
+	}
+	defer db.Close()
 
-	// Создаем программу
-	//tea.WithAltScreen() — запускает программу в альтернативном экране (как vim или less)
+	// Запускаем интерфейс
+	m := InitialModel(conn, username, db)
 	p := tea.NewProgram(m, tea.WithAltScreen())
 
+	// Фоновая горутина для приёма сообщений
 	go func() {
 		for {
 			msgType, payload, err := protocol.ReadPacket(conn)
@@ -79,8 +77,8 @@ func main() {
 				var incoming protocol.Message
 				if json.Unmarshal(payload, &incoming) == nil {
 					if incoming.TimeStamp > 0 {
-						updateLastSync(db, incoming.TimeStamp)
-
+						// Сохраняем в открытый файл
+						saveLastSyncToFile(username, incoming.TimeStamp)
 					}
 					p.Send(serverMsg(incoming))
 				}
@@ -88,7 +86,6 @@ func main() {
 		}
 	}()
 
-	// Запускаем приложение
 	if _, err := p.Run(); err != nil {
 		log.Fatal(err)
 	}

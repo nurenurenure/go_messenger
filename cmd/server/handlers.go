@@ -15,6 +15,8 @@ func (s *Server) handleClient(conn net.Conn) {
 
 	username, lastSyncTime, err := s.authenticate(conn)
 	if err != nil {
+		// Отправляем ошибку клиенту
+		protocol.WritePacket(conn, protocol.TypeError, protocol.Message{Content: "Неверный пароль"})
 		return
 	}
 	if s.shuttingDown {
@@ -134,7 +136,7 @@ func (s *Server) handleSystemMessage(payload []byte, username string) {
 				delete(s.ignored[username], target)
 			}
 			s.mu.Unlock()
-			fmt.Printf("Пользователь %s восстановил чат с %s (входящие разрешены)\n", username, target)
+			fmt.Printf("Пользователь %s активировал чат с %s (входящие разрешены)\n", username, target)
 		}
 	}
 }
